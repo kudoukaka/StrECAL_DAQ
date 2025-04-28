@@ -17,7 +17,7 @@
 #include <sys/ioctl.h>
 #include <signal.h>
 
-// #include "SubTimeFrameHeader.h"
+#include "SubTimeFrameHeader.h"
 #include "roesti.h"
 
 #include "CliSock.cxx"
@@ -203,13 +203,13 @@ void RoestiSampler::InitTask()
 	
 	//RESET
 
-	if (rbcp.Write(buffwrap(0x00), 0x16a, 1) > 0) { LOG(info) << "-----SET: 0x16a"; }
-	if (rbcp.Write(buffwrap(0x00), 0x11d, 1) > 0) { LOG(info) << "-----SET: 0x11d"; }
-	if (rbcp.Write(buffwrap(0xf0), 0x110, 1) > 0) { LOG(info) << "-----SET: 0x110"; }
-	if (rbcp.Write(buffwrap(0x01), 0x112, 1) > 0) { LOG(info) << "-----SET: 0x112"; }
+	// if (rbcp.Write(buffwrap(0x00), 0x16a, 1) > 0) { LOG(info) << "-----SET: 0x16a"; }
+	// if (rbcp.Write(buffwrap(0x00), 0x11d, 1) > 0) { LOG(info) << "-----SET: 0x11d"; }
+	// if (rbcp.Write(buffwrap(0xf0), 0x110, 1) > 0) { LOG(info) << "-----SET: 0x110"; }
+	// if (rbcp.Write(buffwrap(0x01), 0x112, 1) > 0) { LOG(info) << "-----SET: 0x112"; }
 
 	//SETUP
-
+	if(rbcp.Write( buffwrap(0xf0), RESET_INTR          , 1) > 0){ LOG(info) << "-----SET: Reset"; }
 	if(rbcp.Write( buffwrap(31)  , DRS4_SAMPLING_SPEED , 1) > 0){ LOG(info) << "-----SET: DRS4_SAMPLING_SPEED"; }
 	if(rbcp.Write( buffwrap(0x08), ADC_RESET_SYNC      , 1) > 0){ LOG(info) << "-----SET: ADC_RESET_SYNC"; }
     if(rbcp.Write( buffwrap(0x06), ADC_OUT_SYNC        , 1) > 0){ LOG(info) << "-----SET: ADC_OUT_SYNC"; }
@@ -223,11 +223,13 @@ void RoestiSampler::InitTask()
     if(rbcp.Write( buffwrap(0x00), ADC_TEST_CH815      , 1) > 0){ LOG(info) << "-----SET: ADC_TEST_CH815"; }
     if(rbcp.Write( buffwrap(0x00), ADC_OUT_PHASE_CH07  , 1) > 0){ LOG(info) << "-----SET: ADC_OUT_PHASE_CH07"; }
     if(rbcp.Write( buffwrap(0x00), ADC_OUT_PHASE_CH815 , 1) > 0){ LOG(info) << "-----SET: ADC_OUT_PHASE_CH815"; }
-    if(rbcp.Write( buffwrap(0x00), TRIG                , 1) > 0){ LOG(info) << "-----SET: TRIG"; } // 0x00-off, 0x02-base, 0x04-self, 0x08-normal
-    if(rbcp.Write( buffwrap(60)  , ASD_CHECK_START_TIME, 1) > 0){ LOG(info) << "-----SET: ASD_CHECK_START_TIME"; } // ?
-    if(rbcp.Write( buffwrap(70)  , ASD_WAIT_WIDTH      , 1) > 0){ LOG(info) << "-----SET: ASD_WAIT_WIDTH"; } // ?
-    if(rbcp.Write( buffwrap(0x01), ZSUP                , 1) > 0){ LOG(info) << "-----SET: ZSUP"; } // 0x01-on, 0x00-off
-    if(rbcp.Write( buffwrap(0x01), DSEND               , 1) > 0){ LOG(info) << "-----SET: DSEND"; } // 0x01-on, 0x00-off
+    if(rbcp.Write( buffwrap(0x02), TRIG                , 1) > 0){ LOG(info) << "-----SET: TRIG_TYPE"; } // 0x00-off, 0x02-base, 0x04-self, 0x08-normal
+    if(rbcp.Write( buffwrap(0x08), THR_UPP             , 1) > 0){ LOG(info) << "-----SET: THR_UPP"; }
+    if(rbcp.Write( buffwrap(0x00), THR_LOW             , 1) > 0){ LOG(info) << "-----SET: THR_LOW"; }
+	if(rbcp.Write( buffwrap(0x3c), ASD_CHECK_START_TIME, 1) > 0){ LOG(info) << "-----SET: ASD_CHECK_START_TIME"; } // ?
+    if(rbcp.Write( buffwrap(0x46), ASD_WAIT_WIDTH      , 1) > 0){ LOG(info) << "-----SET: ASD_WAIT_WIDTH"; } // ?
+    if(rbcp.Write( buffwrap(0x00), ZSUP                , 1) > 0){ LOG(info) << "-----SET: ZSUP"; } // 0x01-on, 0x00-off
+    if(rbcp.Write( buffwrap(0x00), DSEND               , 1) > 0){ LOG(info) << "-----SET: DSEND"; } // 0x01-on, 0x00-off
     if(rbcp.Write( buffwrap(0x01), DAC_SYNC            , 1) > 0){ LOG(info) << "-----SET: DAC_SYNC"; }
     if(rbcp.Write( buffwrap(0xf0), RESET_DRS           , 1) > 0){ LOG(info) << "-----SET: RESET_DRS"; }
     if(rbcp.Write( buffwrap(0xf0), RESET_INTR          , 1) > 0){ LOG(info) << "-----SET: RESET_INTR"; }
@@ -235,11 +237,11 @@ void RoestiSampler::InitTask()
     if(rbcp.Write( buffwrap(0x01), DATA_RESET          , 1) > 0){ LOG(info) << "-----SET: DATA_RESET"; } //emties ADC data
     if(rbcp.Write( buffwrap(0x04), ADC_OUT_PHASE_CH07  , 1) > 0){ LOG(info) << "-----SET: ADC_OUT_PHASE_CH07"; }
     if(rbcp.Write( buffwrap(0x04), ADC_OUT_PHASE_CH815 , 1) > 0){ LOG(info) << "-----SET: ADC_OUT_PHASE_CH815"; }
-    if(rbcp.Write( buffwrap(0x153),DAISY_CHAIN         , 1) > 0){ LOG(info) << "-----SET: DAISY_CHAIN"; }
+    if(rbcp.Write( buffwrap(0x00), DAISY_CHAIN         , 1) > 0){ LOG(info) << "-----SET: DAISY_CHAIN"; }
 
 	// TCP_SET
 	if(rbcp.Write( buffwrap(0x16a),0x01, 1) > 0){ LOG(info) << "-----SET: TCP"; }
-	if(rbcp.Write( buffwrap(0x16D),0x01, 1) > 0){ LOG(info) << "-----SET: Check TCP"; }
+	// if(rbcp.Write( buffwrap(0x16D),0x01, 1) > 0){ LOG(info) << "-----SET: Check TCP"; }
 
 	}else{
 		LOG(error) << "Error in connection";
@@ -247,25 +249,41 @@ void RoestiSampler::InitTask()
 	}
 	
 	rbcp.Close();
-	fKt1.SetDuration(5000);
+	// fKt1.SetDuration(5000);
 
 }
 
 
-bool RoestiSampler::CheckRoestiHeader(char *buf)
-{
-
-}
+bool RoestiSampler::CheckRoestiHeader(char *buf){}
 
 
 bool RoestiSampler::ConditionalRun()
 {
 	
-	int n;
-	char recvbuff[1024];
-    char recv_header[24];
 
-	int HEADERSIZE = 24;
+	// fair::mq::Parts outParts;
+	// outParts.AddPart(NewMessage());
+	// auto &msgRoestiHeader = outParts[0];
+
+	// FairMQMessagePtr msg(NewMessage(
+	// 	const_cast<char*>(text->data()),
+	// 	text->length(),
+	// 	[](void * /*data*/, void* object) { 
+	// 	  	auto p = reinterpret_cast<std::string*>(object);
+	// 	  	delete p; }, 
+	// 	text
+	//   )
+	// );
+
+	// -----daq method 
+	int nread = 0;
+
+    char recvbuff[1024];
+    char recv_header[24];
+	char* recvh = &recv_header[0];
+	int header_read = 0;
+
+    int HEADERSIZE = 24;
     int FOTTERSIZE = 8;
     int data_read_size = 0;
     int SEUinfo_read_size = 0;
@@ -293,107 +311,69 @@ bool RoestiSampler::ConditionalRun()
 
     char recvbuff_fotter[1024];
 
-	unsigned char TCP_data[37112];
+    int event_counter[10];
+    for(int i = 0; i < 10; i++){
+        event_counter[i] = 0;
+    }
+
+    unsigned char TCP_data[37112];
     union f_data{
         unsigned char data_char[2];
         unsigned short data_short;
     }data;
 
 
-	fair::mq::Parts outParts;
-	outParts.AddPart(NewMessage(HEADERSIZE));
-	auto &msgHeader = outParts[0];
+	// ----------------------------------------------------------including subtimeframe 
+	// fair::mq::Parts outParts;
+	// outParts.AddPart(NewMessage(sizeof(SubTimeFrame::Header)));
+	// auto &msgSTFHeader = outParts[0];
 
-	int header_read = 0;
-	int flag;
+	// LOG(warn) << "------ SubTimeFrameSize : " << sizeof(SubTimeFrame::Header);
 
+	struct Roesti::RoestiHeader roesti_header;
+	int nhsize = sizeof(struct Roesti::RoestiHeader);
+	// int nhsize = sizeof(roesti_header.recv_header);
+
+	// //parts.AddPart(NewMessage(hsize));
+	// //auto &msgRHeader = parts[1];
+
+	int nflag;
+	// int nread = fSock.Receive(reinterpret_cast<char *>(&recv_header), nhsize, nflag);
+	nread = fSock.Receive(reinterpret_cast<char *>(&roesti_header), nhsize, nflag);
 	
-
-	int nread = fSock.Receive(reinterpret_cast<char *>(recv_header + header_read), HEADERSIZE - header_read, flag);
-	// auto nread = recv(sock, recv_header + header_read, HEADERSIZE - header_read, 0);
-	LOG(info) << "Datarecieved -----------\""<< nread << "\"--";
-	LOG(info) << "Recieved Header -----------\""<< recv_header << "\"--";
-	LOG(info) << "Header read -----------\""<< header_read << "\"--";
-	// header_read = header_read + nread;
-	// if(header_read == HEADERSIZE) LOG(info) << "Header max reached -----------";
-	// if(nread < 0) LOG(info) << "-1 header -----------";
+	LOG(warn) << "Data recieved: " << nread;
+	// LOG(warn) << "Size of defined nhsize : " << sizeof(nhsize);
 	
-	//read start
-    
+	if (nread < nhsize) {
+		LOG(warn) << "Irregal data size : " << nread << "/" << nhsize;
+		if (nflag == EAGAIN) {
+			LOG(warn) << "Timeout and Retry";
+			int nnread = fSock.Receive(reinterpret_cast<char *>(&roesti_header) + nread, nhsize - nread, nflag);
+			nread += nnread;
+			if (nread < nhsize) {
+				if (nflag == EAGAIN) {
+					LOG(warn) << "Timeout anagin...";
+				} else {
+					LOG(warn) << "Unknown error...";
+				}
+			}
+		} else {
+			return true;
+		}
+	}
 
-    // n = recv(fSock, recv_header + header_read, HEADERSIZE - header_read, 0);
-    // //   fwrite(recv_header + header_read, 1, n, fp);
-    //   header_read = header_read + n;
-    //   if(header_read == HEADERSIZE) LOG(info) << "Header max reached -----------";
+	// memcpy(&roesti_packet.EventNumber_char[0], &roesti_packet[12], 4);
+	// memcpy(&roesti_packet.Length_char[0], &roesti_packet[8], 4);
+	// memcpy(&roesti_packet.SEUinfoSize_char[0], &roesti_packet[20], 2);
 
-    // memcpy(&EventNumber.EventNumber_char[0], &recv_header[12], 4);
-    // memcpy(&Length.Length_char[0], &recv_header[8], 4);
-    // memcpy(&SEUinfoSize.SEUinfoSize_char[0], &recv_header[20], 2);
+	// struct Roesti::RoestiHeader *rheader;
+	// rheader = &roesti_packet;
+	// int bodysize = rheader->Length_char;
+	// int body_length = sizeof(&roesti_packet.Length_char);
 
-    // int board_IP = (int)recv_header[6];
-
-	// auto text = *nread;
-
-	// FairMQMessagePtr msg(NewMessage(
-	// // 	const_cast<char *>(text->data()),
-	// // 	text->length(),
-	// // 	[](void * /*data*/, void *object)
-	// // 	{
-	// // 		auto p = reinterpret_cast<std::string *>(object);
-	// // 		// LOG(debug) << " sent " << *p;
-	// // 		delete p;
-	// // 	},
-	// nread));
-
-	// LOG(info) << "Sending \"" << nread << "\"";
-	//  LOG(info) << "Sending data end--------------";
-
-    // if (Send(recv_header, fOutputChannelName, 0 ) < 0) {
-    //     LOG(warn) << "failed to send." ;
-    //     return false;
-    // }
+	// LOG(info)<< "Length of the body " << sizeof(&roesti_packet); 
 
 
-	// fText = "___TEST MSG___";
-	// auto text = new std::string(fConfig->GetProperty<std::string>("id") + ":" + fText + " : " + std::to_string(fNumIterations));
-
-	// // copy
-	// auto txt = *text;
-
-	// FairMQMessagePtr msg(NewMessage(
-	// 	const_cast<char *>(text->data()),
-	// 	text->length(),
-	// 	[](void * /*data*/, void *object)
-	// 	{ 
-    //     auto p = reinterpret_cast<std::string*>(object);
-    //     //LOG(debug) << " sent " << *p;
-    //     delete p; },
-	// 	text));
-
-	// LOG(info) << "Sending \"" << txt << "\"";
-
-	// if (Send(msg, fOutputChannelName) < 0)
-	// {
-	// 	LOG(warn) << " event:  " << fNumIterations;
-	// 	return false;
-	// }
-	// else
-	// {
-	// 	++fNumIterations;
-	// 	if (fMaxIterations > 0 && fNumIterations >= fMaxIterations)
-	// 	{
-	// 		LOG(info)
-	// 			<< "Configured maximum number of iterations reached. Leaving RUNNING state. "
-	// 			<< fNumIterations << " / " << fMaxIterations;
-	// 		return false;
-	// 	}
-	// }
-
-	// LOG(info) << " processed events:  " << fNumIterations;
-
-	// return true;
-
-	
 }
 
 
@@ -409,15 +389,16 @@ void RoestiSampler::PostRun()
 void RoestiSampler::PreRun()
 {
 	// LOG(debug) << __FUNCTION__;
-	// if (fTimeout_ms > 0) fSock.SetTimeOut_ms(fTimeout_ms);
-	// int sock = fSock.Connect(fDeviceIp.c_str(), fDataPort);
-	// if (sock < 0) {
-	// 	LOG(error) << "Connection err. " << fDeviceIp << " " << fDataPort;
-	// 	//return false;
-	// 	return;
-	// }
-	// //return true;
-	// return;
+	if (fTimeout_ms > 0) fSock.SetTimeOut_ms(fTimeout_ms);
+	// fSock.SetBuffer(33554432);
+	int sock = fSock.Connect(fDeviceIp.c_str(), fDataPort);
+	if (sock < 0) {
+		LOG(error) << "Connection err. " << fDeviceIp << " " << fDataPort;
+		//return false;
+		// return;
+	}
+	//return true;
+	return;
 }
 
 

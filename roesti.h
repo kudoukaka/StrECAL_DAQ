@@ -1,5 +1,6 @@
 #ifndef INC_ROESTI
 #define INC_ROESTI
+#include <cstdint>
 #endif
 
 namespace Roesti {
@@ -13,10 +14,47 @@ struct Header {
 	unsigned int   trig_count;
 };
 
-struct RoestyHeader{
-	unsigned char magicword;
-	unsigned long length;
-	unsigned int event_num;
+constexpr uint32_t MAGIC {0x89ABCDEF};
+
+struct RoestiHeader{
+	// unsigned int magic=MAGIC;
+	// unsigned char  type;  //= 0xFF00
+	// unsigned char  ipaddr;
+	// unsigned int length;
+	// unsigned int  event_num;
+	// unsigned int seu_count;
+	// unsigned int mbu_count;
+	// unsigned int seu_inf_size;
+	// unsigned char seu_info;
+	
+    uint16_t magic       ; //{MAGIC};
+	uint16_t type        ; //{0};
+	uint16_t ipaddr      ; //{0};
+    uint32_t length      ; //{0};
+    uint32_t event_num   ; //{0};
+    uint16_t seu_count   ; //{0};
+	uint16_t mbu_count   ; //{0};
+	uint16_t seu_inf_size; //{0};
+	uint16_t reserved    ;
+	// unsigned int seu_info;
+
+};
+
+struct RoestiPacket{
+
+	char recvbuff[1024];
+	char recv_header[24];
+	int HEADERSIZE = 24;
+    int FOTTERSIZE = 8;
+
+	char EventNumber_char[4];
+	char Length_char[4];
+	char SEUinfoSize_char[2];
+	char StopNumber_char[2];
+
+	char recvbuff_fotter[1024];
+	unsigned char TCP_data[37112];
+	unsigned char data_char[2];
 };
 
 }
@@ -52,8 +90,8 @@ constexpr unsigned int  ADC_OUT_PHASE_CH815 = 0x00020016;    // ADC Output Phase
 
 
 
-constexpr unsigned int  THR_UP      = 0x115;    // Threshold up ?
-constexpr unsigned int  THR_DOWN    = 0x116;    // Threshold down ?
+constexpr unsigned int  THR_UPP     = 0x115;    // Threshold upper
+constexpr unsigned int  THR_LOW     = 0x116;    // Threshold lower
 constexpr unsigned int  TRIG        = 0x11d;    // Trigger send / Read mode
 constexpr unsigned int  ASD_CHECK_START_TIME = 0x141;    // -
 constexpr unsigned int  ASD_WAIT_WIDTH = 0x142;          // -
