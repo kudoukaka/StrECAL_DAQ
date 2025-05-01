@@ -31,6 +31,7 @@ struct RoestiHeader{
 	uint16_t type        ; //{0};
 	uint16_t ipaddr      ; //{0};
     uint32_t length      ; //{0};
+	// char length[4];
     uint32_t event_num   ; //{0};
     uint16_t seu_count   ; //{0};
 	uint16_t mbu_count   ; //{0};
@@ -38,6 +39,18 @@ struct RoestiHeader{
 	uint16_t reserved    ;
 	// unsigned int seu_info;
 
+};
+
+struct RoestiDataBody{
+	uint16_t data_packet_word;
+	uint8_t reserved_header;
+	uint8_t channel_num;
+	uint16_t stop_num;
+	uint16_t data_length;
+	uint16_t data;
+	uint16_t data_footer;
+	uint8_t keyword;
+	uint8_t reserved_footer;
 };
 
 struct RoestiPacket{

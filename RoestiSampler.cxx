@@ -23,14 +23,21 @@
 #include "CliSock.cxx"
 #include "RBCP.cxx"
 #include "KTimer.cxx"
-// #include "hexdump.cxx"
+#include "hexdump.cxx"
 
 
 char* buffwrap(unsigned char value){
 	static char buffer_value[4];
 	buffer_value[0] = value;
 	return buffer_value;
+
 }
+
+char* buffcast(uint8_t num){
+	char* bytePtr = reinterpret_cast<char*>(&num);
+	return bytePtr;
+}
+
 
 namespace bpo = boost::program_options;
 
@@ -203,10 +210,10 @@ void RoestiSampler::InitTask()
 	
 	//RESET
 
-	// if (rbcp.Write(buffwrap(0x00), 0x16a, 1) > 0) { LOG(info) << "-----SET: 0x16a"; }
-	// if (rbcp.Write(buffwrap(0x00), 0x11d, 1) > 0) { LOG(info) << "-----SET: 0x11d"; }
-	// if (rbcp.Write(buffwrap(0xf0), 0x110, 1) > 0) { LOG(info) << "-----SET: 0x110"; }
-	// if (rbcp.Write(buffwrap(0x01), 0x112, 1) > 0) { LOG(info) << "-----SET: 0x112"; }
+	if (rbcp.Write(buffcast(0x00), 0x16a, 1) > 0) { LOG(info) << "-----SET: 0x16a"; }
+	if (rbcp.Write(buffcast(0x00), 0x11d, 1) > 0) { LOG(info) << "-----SET: 0x11d"; }
+	if (rbcp.Write(buffcast(0xf0), 0x110, 1) > 0) { LOG(info) << "-----SET: 0x110"; }
+	if (rbcp.Write(buffcast(0x01), 0x112, 1) > 0) { LOG(info) << "-----SET: 0x112"; }
 
 	//SETUP
 	if(rbcp.Write( buffwrap(0xf0), RESET_INTR          , 1) > 0){ LOG(info) << "-----SET: Reset"; }
@@ -216,16 +223,18 @@ void RoestiSampler::InitTask()
     if(rbcp.Write( buffwrap(0x3C), ADC_RESET_CH07      , 1) > 0){ LOG(info) << "-----SET: ADC_RESET_CH07"; }
     if(rbcp.Write( buffwrap(0x3C), ADC_RESET_CH815     , 1) > 0){ LOG(info) << "-----SET: ADC_RESET_CH815"; }
     if(rbcp.Write( buffwrap(0x03), ADC_PWM_CH07        , 1) > 0){ LOG(info) << "-----SET: ADC_PWM_CH07"; }
-    if(rbcp.Write( buffwrap(0x00), ADC_PWM_CH815       , 1) > 0){ LOG(info) << "-----SET: ADC_PWM_CH815"; }
-    if(rbcp.Write( buffwrap(0x03), ADC_OUT_CH07        , 1) > 0){ LOG(info) << "-----SET: ADC_OUT_CH07"; }
+    if(rbcp.Write( buffwrap(0x00), ADC_PWM_CH07        , 1) > 0){ LOG(info) << "-----SET: ADC_PWM_CH07_2"; }
+	if(rbcp.Write( buffwrap(0x03), ADC_PWM_CH815       , 1) > 0){ LOG(info) << "-----SET: ADC_PWM_CH815"; }
+	if(rbcp.Write( buffwrap(0x00), ADC_PWM_CH815       , 1) > 0){ LOG(info) << "-----SET: ADC_PWM_CH815_2"; }
+    if(rbcp.Write( buffwrap(0x00), ADC_OUT_CH07        , 1) > 0){ LOG(info) << "-----SET: ADC_OUT_CH07"; }
     if(rbcp.Write( buffwrap(0x00), ADC_OUT_CH815       , 1) > 0){ LOG(info) << "-----SET: ADC_OUT_CH815"; }
     if(rbcp.Write( buffwrap(0x00), ADC_TEST_CH07       , 1) > 0){ LOG(info) << "-----SET: ADC_TEST_CH07"; }
     if(rbcp.Write( buffwrap(0x00), ADC_TEST_CH815      , 1) > 0){ LOG(info) << "-----SET: ADC_TEST_CH815"; }
-    if(rbcp.Write( buffwrap(0x00), ADC_OUT_PHASE_CH07  , 1) > 0){ LOG(info) << "-----SET: ADC_OUT_PHASE_CH07"; }
-    if(rbcp.Write( buffwrap(0x00), ADC_OUT_PHASE_CH815 , 1) > 0){ LOG(info) << "-----SET: ADC_OUT_PHASE_CH815"; }
-    if(rbcp.Write( buffwrap(0x02), TRIG                , 1) > 0){ LOG(info) << "-----SET: TRIG_TYPE"; } // 0x00-off, 0x02-base, 0x04-self, 0x08-normal
     if(rbcp.Write( buffwrap(0x08), THR_UPP             , 1) > 0){ LOG(info) << "-----SET: THR_UPP"; }
-    if(rbcp.Write( buffwrap(0x00), THR_LOW             , 1) > 0){ LOG(info) << "-----SET: THR_LOW"; }
+	if(rbcp.Write( buffwrap(0x00), THR_LOW             , 1) > 0){ LOG(info) << "-----SET: THR_LOW"; }
+	if(rbcp.Write( buffwrap(0x02), TRIG                , 1) > 0){ LOG(info) << "-----SET: TRIG_TYPE"; } // 0x00-off, 0x02-base, 0x04-self, 0x08-normal
+	if(rbcp.Write( buffwrap(0x00), ADC_OUT_PHASE_CH07  , 1) > 0){ LOG(info) << "-----SET: ADC_OUT_PHASE_CH07"; }
+    if(rbcp.Write( buffwrap(0x00), ADC_OUT_PHASE_CH815 , 1) > 0){ LOG(info) << "-----SET: ADC_OUT_PHASE_CH815"; }
 	if(rbcp.Write( buffwrap(0x3c), ASD_CHECK_START_TIME, 1) > 0){ LOG(info) << "-----SET: ASD_CHECK_START_TIME"; } // ?
     if(rbcp.Write( buffwrap(0x46), ASD_WAIT_WIDTH      , 1) > 0){ LOG(info) << "-----SET: ASD_WAIT_WIDTH"; } // ?
     if(rbcp.Write( buffwrap(0x00), ZSUP                , 1) > 0){ LOG(info) << "-----SET: ZSUP"; } // 0x01-on, 0x00-off
@@ -240,7 +249,7 @@ void RoestiSampler::InitTask()
     if(rbcp.Write( buffwrap(0x00), DAISY_CHAIN         , 1) > 0){ LOG(info) << "-----SET: DAISY_CHAIN"; }
 
 	// TCP_SET
-	if(rbcp.Write( buffwrap(0x16a),0x01, 1) > 0){ LOG(info) << "-----SET: TCP"; }
+	// if(rbcp.Write( buffwrap(0x16a),0x01, 1) > 0){ LOG(info) << "-----SET: TCP"; }
 	// if(rbcp.Write( buffwrap(0x16D),0x01, 1) > 0){ LOG(info) << "-----SET: Check TCP"; }
 
 	}else{
@@ -275,79 +284,238 @@ bool RoestiSampler::ConditionalRun()
 	//   )
 	// );
 
-	// -----daq method 
-	int nread = 0;
+	// ----------------------------------------------------------------------------------------old daq method
+	// int sock;
+    // struct sockaddr_in servaddr;
+	// #define SERVPORT 24
+    // #define SiTCP_IP "192.168.10.19"
 
-    char recvbuff[1024];
-    char recv_header[24];
-	char* recvh = &recv_header[0];
-	int header_read = 0;
+	// std::cout << "------------------------------Start" << std::endl;
+	// //DAQ
+    // memset(&servaddr, 0, sizeof(servaddr));
+    // servaddr.sin_family = AF_INET;
+    // servaddr.sin_port = htons(SERVPORT);
+    // if(inet_pton(AF_INET, SiTCP_IP, &servaddr.sin_addr) <= 0){
+    //     fprintf(stderr, "err inet_pton\n");
+    //     exit(1);
+    // }
 
-    int HEADERSIZE = 24;
-    int FOTTERSIZE = 8;
-    int data_read_size = 0;
-    int SEUinfo_read_size = 0;
 
-    union EventNumber_f{
-        char EventNumber_char[4];
-        unsigned EventNumber_int;
-    }EventNumber;
+    // if((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0){
+    //     fprintf(stderr, "err socket\n");
+    //     exit(1);
+    // }
 
-    union Length_f{
-        char Length_char[4];
-        unsigned Length_int;
-    }Length;
+    // //increase send buffer
+    // int sendbuffer_size = 33554432;
+    // if ( setsockopt (sock, SOL_SOCKET, SO_RCVBUF, &sendbuffer_size, sizeof(sendbuffer_size)) < 0){
+    //     fprintf(stderr, "setsockopt failed\n");
+    //     exit(1);
+    // }
 
-    union SEUinfoSize_f{
-        char SEUinfoSize_char[2];
-        unsigned short SEUinfoSize_int;
-    }SEUinfoSize;
+
+
+    // if(connect(sock, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0){
+    //     fprintf(stderr, "err connetct \n");
+    //     exit(1);
+    // }
+
+    // sleep(1);
+
+    // int first_event[10];
+    // unsigned int pre_event_number[10];
+    // int i;
+    // for(i = 0; i < 10; i++){
+    //     first_event[i] = 1;
+    //     pre_event_number[1] = 0;
+    // }
+    // int n;
+    // char recvbuff[1024];
+    // char recv_header[24];
+    // printf("TCP connect\n");
+
+    // int HEADERSIZE = 24;
+    // int FOTTERSIZE = 8;
+    // int data_read_size = 0;
+    // int SEUinfo_read_size = 0;
+
+    // union EventNumber_f{
+    //     char EventNumber_char[4];
+    //     unsigned EventNumber_int;
+    // }EventNumber;
+
+    // union Length_f{
+    //     char Length_char[4];
+    //     unsigned Length_int;
+    // }Length;
+
+    // union SEUinfoSize_f{
+    //     char SEUinfoSize_char[2];
+    //     unsigned short SEUinfoSize_int;
+    // }SEUinfoSize;
 
     
-    union StopNumber_f{
-        char StopNumber_char[2];
-        unsigned short StopNumber_short;
-    }StopNumber;
+    // union StopNumber_f{
+    //     char StopNumber_char[2];
+    //     unsigned short StopNumber_short;
+    // }StopNumber;
 
-    char recvbuff_fotter[1024];
+    // char recvbuff_fotter[1024];
 
-    int event_counter[10];
-    for(int i = 0; i < 10; i++){
-        event_counter[i] = 0;
-    }
+    // int event_counter[10];
+    // for(int i = 0; i < 10; i++){
+    //     event_counter[i] = 0;
+    // }
 
-    unsigned char TCP_data[37112];
-    union f_data{
-        unsigned char data_char[2];
-        unsigned short data_short;
-    }data;
+    // unsigned char TCP_data[37112];
+    // union f_data{
+    //     unsigned char data_char[2];
+    //     unsigned short data_short;
+    // }data;
 
+    // //read start
+    // for(;;){
+    //     int header_read = 0;
+    //     while( (n = recv(sock, recv_header + header_read, HEADERSIZE - header_read, 0)) > 0){
+	// 	//   std::cout << "Header:" << hexdump(recv_header, HEADERSIZE)<< std::endl;
+	// 	hexdump(recv_header, HEADERSIZE);
+    //         header_read = header_read + n;
+    //         if(header_read == HEADERSIZE)break;
+    //     }
+
+    //     memcpy(&EventNumber.EventNumber_char[0], &recv_header[12], 4);
+    //     memcpy(&Length.Length_char[0], &recv_header[8], 4);
+    //     memcpy(&SEUinfoSize.SEUinfoSize_char[0], &recv_header[20], 2);
+
+    //     int board_IP = (int)recv_header[6];
+	// 	std::cout << "IP:" << board_IP << std::endl;
+
+    //     //read data
+    //     int data_read = 0;
+    //     for(;;){
+    //         if((Length.Length_int - data_read) < 1024){
+    //             data_read_size = Length.Length_int - data_read;
+    //         }
+    //         else{
+    //             data_read_size = 1024;
+    //         }
+    //         while( (n = recv(sock, recvbuff, data_read_size, 0)) > 0){
+	// 		    std::cout << "Data:" << n << std::endl;
+    //             memcpy(TCP_data + data_read, recvbuff, n);
+    //             data_read = data_read + n;
+
+    //             //change read size
+    //             if((Length.Length_int - data_read) <= 0){
+    //                 break;
+    //             }
+    //             else if((Length.Length_int - data_read) < 1024){
+    //                 data_read_size = Length.Length_int - data_read;
+    //             }
+    //             else{
+    //                 data_read_size = 1024;
+    //             }
+    //         }
+
+    //         if(data_read ==  (int)Length.Length_int)break;
+    //     }
+
+
+    //     //read SEU info
+    //     int SEUinfo_read = 0;
+    //     for(;;){
+    //         if((SEUinfoSize.SEUinfoSize_int - SEUinfo_read) < 1024){
+    //             SEUinfo_read_size = SEUinfoSize.SEUinfoSize_int - SEUinfo_read;
+    //         }
+    //         else{
+    //             SEUinfo_read_size = 1024;
+    //         }
+    //         while( (n = recv(sock, recvbuff, SEUinfo_read_size, 0)) > 0){
+	// 			std::cout << "SEU:" << n << std::endl;
+
+    //             SEUinfo_read = SEUinfo_read + n;
+
+    //             //change read size
+    //             if((SEUinfoSize.SEUinfoSize_int - SEUinfo_read) <= 0){
+    //                 break;
+    //             }
+    //             else if((SEUinfoSize.SEUinfoSize_int - SEUinfo_read) < 1024){
+    //                 SEUinfo_read_size = SEUinfoSize.SEUinfoSize_int - SEUinfo_read;
+    //             }
+    //             else{
+    //                 SEUinfo_read_size = 1024;
+    //             }
+    //         }
+    //         if(SEUinfo_read ==  SEUinfoSize.SEUinfoSize_int)break;
+    //     }
+
+    //     //read fotter
+    //     int fotter_read = 0;
+    //     int break_flag = 0;
+
+    //     int read_fotter_n = 0;
+    //     while( (n = recv(sock, recvbuff, FOTTERSIZE - fotter_read, 0)) > 0){
+    //       std::cout << "Footer:" << n << std::endl;
+    //         fotter_read = fotter_read + n;
+
+    //         memcpy(recvbuff_fotter + read_fotter_n, recvbuff, n);
+    //         read_fotter_n = read_fotter_n + n;
+    //         if(read_fotter_n == FOTTERSIZE){
+    //             if(fotter_read == FOTTERSIZE){
+
+    //                 if((unsigned char)recvbuff_fotter[0] != 0x98 ||
+    //                     (unsigned char)recvbuff_fotter[1] != 0xba ||
+    //                     (unsigned char)recvbuff_fotter[2] != 0xdc ||
+    //                     (unsigned char)recvbuff_fotter[3] != 0xfe){
+    //                     printf("footer err\n");
+    //                     printf("n = %d, %x, %x, %x, %x,\n", n, (unsigned char)recvbuff[0], (unsigned char)recvbuff[1], (unsigned char)recvbuff[2], (unsigned char)recvbuff[3]);
+    //                     break_flag = 1;
+    //                 }
+    //                 break;
+    //             }
+    //         }
+    //     }
+	// }
 
 	// ----------------------------------------------------------including subtimeframe 
 	// fair::mq::Parts outParts;
 	// outParts.AddPart(NewMessage(sizeof(SubTimeFrame::Header)));
 	// auto &msgSTFHeader = outParts[0];
+	// fair::mq::Parts outParts;
+	// outParts.AddPart(NewMessage(sizeof(Roesti::RoestiHeader)));
+	// auto &msgRoestiHeader = outParts[0];
 
 	// LOG(warn) << "------ SubTimeFrameSize : " << sizeof(SubTimeFrame::Header);
+
+	// -----------------------------------------------------------reading to structure
+	int data_read = 0;
+	int data_read_size = 0;
 
 	struct Roesti::RoestiHeader roesti_header;
 	int nhsize = sizeof(struct Roesti::RoestiHeader);
 	// int nhsize = sizeof(roesti_header.recv_header);
 
+	// struct Roesti::RoestiPacket roesti_packet;
+	// int nhsize = sizeof(struct Roesti::RoestiPacket);
+
 	// //parts.AddPart(NewMessage(hsize));
 	// //auto &msgRHeader = parts[1];
 
 	int nflag;
-	// int nread = fSock.Receive(reinterpret_cast<char *>(&recv_header), nhsize, nflag);
-	nread = fSock.Receive(reinterpret_cast<char *>(&roesti_header), nhsize, nflag);
+	int nread;
+	char recv_header[24];
+
+	nread = fSock.Receive(reinterpret_cast<char *>(&recv_header), sizeof(recv_header), nflag);
+	// nread = fSock.Receive(reinterpret_cast<char *>(&roesti_header), nhsize, nflag);
+	// nread = fSock.Receive(reinterpret_cast<char *>(&roesti_packet), nhsize, nflag);
 	
-	LOG(warn) << "Data recieved: " << nread;
+	LOG(warn) << "Header data recieved: " << nread;
 	// LOG(warn) << "Size of defined nhsize : " << sizeof(nhsize);
 	
 	if (nread < nhsize) {
 		LOG(warn) << "Irregal data size : " << nread << "/" << nhsize;
 		if (nflag == EAGAIN) {
 			LOG(warn) << "Timeout and Retry";
+			// int nnread = fSock.Receive(reinterpret_cast<char *>(&roesti_packet) + nread, nhsize - nread, nflag);
 			int nnread = fSock.Receive(reinterpret_cast<char *>(&roesti_header) + nread, nhsize - nread, nflag);
 			nread += nnread;
 			if (nread < nhsize) {
@@ -362,17 +530,33 @@ bool RoestiSampler::ConditionalRun()
 		}
 	}
 
-	// memcpy(&roesti_packet.EventNumber_char[0], &roesti_packet[12], 4);
-	// memcpy(&roesti_packet.Length_char[0], &roesti_packet[8], 4);
-	// memcpy(&roesti_packet.SEUinfoSize_char[0], &roesti_packet[20], 2);
+	//get roesty_header -> length
+	memcpy(&roesti_header.length, &recv_header[8], 4);
+	// memcpy(&roesti_header.event_num, &recv_header[12], 4);
 
-	// struct Roesti::RoestiHeader *rheader;
-	// rheader = &roesti_packet;
-	// int bodysize = rheader->Length_char;
-	// int body_length = sizeof(&roesti_packet.Length_char);
+	std::cout << "body length size: " << sizeof(roesti_header.length) << " / body length value: " << roesti_header.length << "\n";
 
-	// LOG(info)<< "Length of the body " << sizeof(&roesti_packet); 
+	// uint16_t value = *reinterpret_cast<uint16_t*>(&roesti_header.length[0]);
+	// std::cout << "Read value (hex): 0x" << std::hex << &roesti_header.length << std::endl;
 
+	// struct Roesti::RoestiDataBody roesti_body;
+	// int body_packet = sizeof(roesti_body);
+
+
+	// char recvbuff[1024];
+	unsigned char TCP_data[37112];
+
+
+	int body_read = fSock.Receive(reinterpret_cast<char *>(&TCP_data), roesti_header.length, nflag);
+
+	std::cout << "body read: " << body_read << "\n";
+
+	// // outParts.AddPart(NewMessage(sizeof(recv_header) + body_packet));
+	// // //auto &msgRBody = parts[2];
+	// // auto &msg = outParts[1];
+	// // fair::mq::Parts outParts;
+	// // outParts.AddPart(NewMessage(body_read));
+	// // Send(outParts, fOutputChannelName);
 
 }
 
