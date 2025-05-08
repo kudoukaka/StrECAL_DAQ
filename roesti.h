@@ -16,6 +16,7 @@ struct Header {
 
 constexpr uint32_t MAGIC {0x89ABCDEF};
 
+#pragma pack(2)
 struct RoestiHeader{
 	// unsigned int magic=MAGIC;
 	// unsigned char  type;  //= 0xFF00
@@ -27,18 +28,36 @@ struct RoestiHeader{
 	// unsigned int seu_inf_size;
 	// unsigned char seu_info;
 	
-    uint16_t magic       ; //{MAGIC};
+	uint32_t magic       ; //{MAGIC};
 	uint16_t type        ; //{0};
 	uint16_t ipaddr      ; //{0};
-    uint32_t length      ; //{0};
-	// char length[4];
-    uint32_t event_num   ; //{0};
-    uint16_t seu_count   ; //{0};
+	uint32_t length      ; //{0};
+	uint32_t event_num   ; //{0};
+	uint16_t seu_count   ; //{0};
 	uint16_t mbu_count   ; //{0};
 	uint16_t seu_inf_size; //{0};
 	uint16_t reserved    ;
-	// unsigned int seu_info;
+};
 
+struct RoestiFooter {
+	uint32_t footer;
+	uint32_t crc32;
+};
+
+#pragma pack(1)
+constexpr uint32_t DATA_PACKET_MAGIC {0x01234};
+struct DataPacketHeader {
+	uint16_t data_packet_word;
+	uint8_t reserved_header;
+	uint8_t channel_num;
+	uint16_t stop_num;
+	uint16_t data_length;
+};
+
+struct DataPacketFooter {
+	uint16_t footer;
+	uint8_t keyword;
+	uint8_t reserved;
 };
 
 struct RoestiDataBody{
@@ -58,7 +77,7 @@ struct RoestiPacket{
 	char recvbuff[1024];
 	char recv_header[24];
 	int HEADERSIZE = 24;
-    int FOTTERSIZE = 8;
+	int FOTTERSIZE = 8;
 
 	char EventNumber_char[4];
 	char Length_char[4];
@@ -69,6 +88,7 @@ struct RoestiPacket{
 	unsigned char TCP_data[37112];
 	unsigned char data_char[2];
 };
+#pragma pack()
 
 }
 

@@ -25,18 +25,27 @@
 #include "RBCP.cxx"
 #include "KTimer.cxx"
 #include "hexdump.cxx"
-// #include "utility/Hexdump.hpp"
+#include "utility/HexDump.h"
 
+
+#define LOG(val) std::cout 
+// int fTimeout_ms = 0;
+// std::string fDeviceIp = "192.168.10.19";
+// int fDataPort = 24;
+// int fControlPort = 4660;
+// int fNumDestination = 1;
+
+CliSock fSock;
 
 char* buffwrap(unsigned char value){
-	static char buffer_value[4];
+	static unsigned char buffer_value[4] = {0x00, 0x00, 0x00, 0x00};
 	buffer_value[0] = value;
-	return buffer_value;
+	return reinterpret_cast<char *>(buffer_value);
   
 }
 
 char* buffcast(uint8_t num){
-	char* bytePtr = reinterpret_cast<char*>(&num);
+	static char* bytePtr = reinterpret_cast<char*>(&num);
 	return bytePtr;
 }
 
@@ -126,7 +135,6 @@ void addCustomOptions(bpo::options_description& options)
 		(opt::PollTimeout.data(),
 			bpo::value<std::string>()->default_value("1"),
 			"Timeout of polling (in msec)")
-
 		(opt::RBCP.data(),
 			bpo::value<std::vector<std::string> >()->default_value(
 				{}, "address, value, ..."),
@@ -196,15 +204,15 @@ void RoestiSampler::InitTask()
 	//fDeviceType	= std::stoi(fConfig->GetProperty<std::string>("DeviceType"));
 	//LOG(info) << "Device Type: " << fDeviceType;
 
-	int err_board=1;
-	unsigned int length[256];
+	// int err_board=1;
+	// unsigned int length[256];
 
 	RBCP rbcp;
 
 	if(rbcp.Open(fDeviceIp.c_str(), fControlPort)){
 
 	LOG(info) << "Opened IP: " << fDeviceIp << "Port" << fControlPort;
-	LOG(info) << "Run Mode: " << fMode;
+	// LOG(info) << "Run Mode: " << fMode;
 	
 
 	LOG(info) << "Opened IP: " << fDeviceIp << "Port" << fControlPort;
@@ -267,15 +275,55 @@ void RoestiSampler::InitTask()
 }
 
 
-bool RoestiSampler::CheckRoestiHeader(char *buf){}
+bool CheckRoestiHeader(char *buf){ return true; }
+
+int CheckRoestiDataPacket(unsigned char *data, int len)
+{
+
+	unsigned char *buf = data;
+	while(true) {
+		struct Roesti::DataPacketHeader *ppheader = reinterpret_cast<Roesti::DataPacketHeader *>(buf);
+		if (ppheader->data_packet_word != Roesti::DATA_PACKET_MAGIC) break;
+
+		std::cout << "DP MAGIC: 0x" << std::hex << ppheader->data_packet_word;
+		std::cout << ", res: 0x" << std::hex << static_cast<unsigned int>(ppheader->reserved_header);
+		std::cout << ", ch: " << std::dec << static_cast<unsigned int>(ppheader->channel_num);
+		std::cout << ", stop: " << std::dec << ppheader->stop_num;
+		std::cout << ", Len: " << std::dec << ppheader->data_length;
+		std::cout << std::endl;
+
+		struct Roesti::DataPacketFooter *ppfooter
+			= reinterpret_cast<Roesti::DataPacketFooter *>
+			(buf + ppheader->data_length + sizeof(Roesti::DataPacketHeader));
+
+		std::cout << "DP footer: 0x" << std::hex << ppfooter->footer;
+		std::cout << ", keyword: 0x" << static_cast<unsigned int>(ppfooter->keyword);
+		std::cout << ", res: 0x" << static_cast<unsigned int>(ppfooter->reserved);
+		std::cout << std::dec << std::endl;
+
+		buf += sizeof(Roesti::DataPacketHeader) + ppheader->data_length + sizeof(Roesti::DataPacketFooter);
+		if ((buf - data) > len) break;
+	}
+
+	int left = buf - data - len;
+	if (left > 0) {
+		std::cout << "Left data: " << left << " (" << (buf - data) << "/" << len << ")";
+		std::for_each(buf, data + len, HexDump(16));
+	}
+
+
+	return 0;
+}
+
 
 
 bool RoestiSampler::ConditionalRun()
 {
 	
 
-	// fair::mq::Parts outParts;
-	// outParts.AddPart(NewMessage());
+	fair::mq::Parts outParts;
+	// struct Roesti::RoestiHeader roesti_header;
+	outParts.AddPart(NewMessage(sizeof(struct Roesti::RoestiHeader)));
 	// auto &msgRoestiHeader = outParts[0];
 
 	// FairMQMessagePtr msg(NewMessage(
@@ -288,93 +336,27 @@ bool RoestiSampler::ConditionalRun()
 	//   )
 	// );
 
-	// ----------------------------------------------------------------------------------------old daq method 
-	// int sock;
-    // struct sockaddr_in servaddr;
-	// #define SERVPORT 24
-    // #define SiTCP_IP "192.168.10.19"
+	// // outParts.AddPart(NewMessage(sizeof(recv_header) + body_packet));
+	// // //auto &msgRBody = parts[2];
+	// // auto &msg = outParts[1];
+	// // fair::mq::Parts outParts;
+	// // outParts.AddPart(NewMessage(body_read));
 
-	// std::cout << "------------------------------Start" << std::endl;
-	// //DAQ
-    // memset(&servaddr, 0, sizeof(servaddr));
-    // servaddr.sin_family = AF_INET;
-    // servaddr.sin_port = htons(SERVPORT);
-    // if(inet_pton(AF_INET, SiTCP_IP, &servaddr.sin_addr) <= 0){
-    //     fprintf(stderr, "err inet_pton\n");
-    //     exit(1);
-    // }
-
-
-    // if((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0){
-    //     fprintf(stderr, "err socket\n");
-    //     exit(1);
-    // }
-
-    // //increase send buffer
-    // int sendbuffer_size = 33554432;
-    // if ( setsockopt (sock, SOL_SOCKET, SO_RCVBUF, &sendbuffer_size, sizeof(sendbuffer_size)) < 0){
-    //     fprintf(stderr, "setsockopt failed\n");
-    //     exit(1);
-    // }
-
-
-
-    // if(connect(sock, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0){
-    //     fprintf(stderr, "err connetct \n");
-    //     exit(1);
-    // }
-
-    // sleep(1);
-
-    // int first_event[10];
-    // unsigned int pre_event_number[10];
-    // int i;
-    // for(i = 0; i < 10; i++){
-    //     first_event[i] = 1;
-    //     pre_event_number[1] = 0;
-    // }
-    // int n;
-    // char recvbuff[1024];
-    // char recv_header[24];
-    // printf("TCP connect\n");
-
-    // int HEADERSIZE = 24;
-    // int FOTTERSIZE = 8;
-    // int data_read_size = 0;
-    // int SEUinfo_read_size = 0;
-
-	// fair::mq::Parts outParts;
-	// outParts.AddPart(NewMessage());
-	// auto &msgRoestiHeader = outParts[0];
-
-	// FairMQMessagePtr msg(NewMessage(
-	// 	const_cast<char*>(text->data()),
-	// 	text->length(),
-	// 	[](void * /*data*/, void* object) { 
-	// 	  	auto p = reinterpret_cast<std::string*>(object);
-	// 	  	delete p; }, 
-	// 	text
-	//   )
-	// );
 
 	// ----------------------------------------------------------including subtimeframe 
 	// fair::mq::Parts outParts;
 	// outParts.AddPart(NewMessage(sizeof(SubTimeFrame::Header)));
 	// auto &msgSTFHeader = outParts[0];
-	// fair::mq::Parts outParts;
-	// outParts.AddPart(NewMessage(sizeof(Roesti::RoestiHeader)));
-	// auto &msgRoestiHeader = outParts[0];
 
 	// LOG(warn) << "------ SubTimeFrameSize : " << sizeof(SubTimeFrame::Header);
 
 	// -----------------------------------------------------------reading to structure
-	int data_read = 0;
-	int data_read_size = 0;
+	//int data_read = 0;
+	//int data_read_size = 0;
 	
-	struct Roesti::RoestiHeader roesti_header;
-	int struct_header_size = sizeof(struct Roesti::RoestiHeader);
+	//struct Roesti::RoestiHeader roesti_header;
+	//int struct_header_size = sizeof(struct Roesti::RoestiHeader);
 	// int nhsize = sizeof(roesti_header.recv_header);
-	
 
 	// struct Roesti::RoestiPacket roesti_packet;
 	// int nhsize = sizeof(struct Roesti::RoestiPacket);
@@ -382,31 +364,35 @@ bool RoestiSampler::ConditionalRun()
 	// //parts.AddPart(NewMessage(hsize));
 	// //auto &msgRHeader = parts[1];
 
+	unsigned char rec_buf[40*1000];
+	struct Roesti::RoestiHeader *pheader = reinterpret_cast<struct Roesti::RoestiHeader *>(rec_buf);
+	unsigned char *TCP_data = rec_buf + sizeof(struct Roesti::RoestiHeader);
+	
+
 	int nflag;
 	int header_read;
-	char recv_header[24];
-	int header_size = sizeof(recv_header);
 
-	header_read = fSock.Receive(reinterpret_cast<char *>(&recv_header), header_size , nflag);
-	// header_read = fSock.Receive(reinterpret_cast<char *>(&roesti_header), nhsize, nflag);
-	// nread = fSock.Receive(reinterpret_cast<char *>(&roesti_packet), nhsize, nflag);
+	int header_size = sizeof(struct Roesti::RoestiHeader);
+
+
+	header_read = fSock.Receive(reinterpret_cast<char *>(pheader), sizeof(struct Roesti::RoestiHeader) , nflag);
+
 	
 	LOG(info) << "Header data recieved: " << header_read;
 	// LOG(warn) << "Size of defined nhsize : " << sizeof(nhsize);
-	// custom_hexdump(&recv_header, 24);
 	
 	if (header_read < header_size) {
 		LOG(warn) << "Irregal data size : " << header_read << "/" << header_size;
 		if (nflag == EAGAIN) {
 			LOG(warn) << "Timeout and Retry";
-			// int nnread = fSock.Receive(reinterpret_cast<char *>(&roesti_packet) + nread, nhsize - nread, nflag);
-			int hh = fSock.Receive(reinterpret_cast<char *>(&recv_header) + header_read, header_size - header_read, nflag);
+			int hh = fSock.Receive(reinterpret_cast<char *>(pheader) + header_read,
+				 header_size - header_read, nflag);
 			header_read += hh;
 			if (header_read < header_size) {
 				if (nflag == EAGAIN) {
-					LOG(warn) << "Timeout anagin...";
+					std::cout << "Timeout anagin..." << std::endl;
 				} else {
-					LOG(warn) << "Unknown error...";
+					std::cout << "Unknown error..." << std::endl;
 				}
 			}
 		} else {
@@ -414,48 +400,67 @@ bool RoestiSampler::ConditionalRun()
 		}
 	}
 
-	//get roesty_header -> length
-	memcpy(&roesti_header.length, &recv_header[8], 4);
-	memcpy(&roesti_header.event_num, &recv_header[12], 4);
 
-	std::cout << "body length size: " << sizeof(roesti_header.length) << " / body length value: " << roesti_header.length << std::endl;
-	std::cout << "event number: " << roesti_header.event_num << std::endl;
+	std::cout << "body length size: " << sizeof(pheader->length)
+		<< " / body length value: " << pheader->length << std::endl;
+	std::cout << "event number: " << pheader->event_num << std::endl;
 
-	// uint16_t value = *reinterpret_cast<uint16_t*>(&roesti_header.length[0]);
-	// std::cout << "Read value (hex): 0x" << std::hex << &roesti_header.length << std::endl;
+	std::cout << "MAGIC: 0x" << std::hex << pheader->magic;
+	std::cout << ", Type: 0x" << std::hex << pheader->type;
+	std::cout << ", IP: " << std::dec << (pheader->ipaddr & 0xff00 >> 16)
+		<< "." << (pheader->ipaddr & 0xff) << std::endl;
+	std::cout << "Len: " << std::dec << pheader->length;
+	std::cout << ", Event Number: " << std::dec << pheader->event_num << std::endl;
 
-	// struct Roesti::RoestiDataBody roesti_body;
-	// int body_packet = sizeof(roesti_body);
 
+	unsigned int dp_read = 0;
+	unsigned int dp_len = pheader->length;
 
-	// char recvbuff[1024];
-	unsigned char TCP_data[37112];
+	for (int i = 0 ; i < 10 ; i++) {
+		dp_read += fSock.Receive(reinterpret_cast<char *>(TCP_data), dp_len - dp_read, nflag);
+		std::cout << "data packet read: " << dp_read << "/" << dp_len << std::endl;
+		if (dp_read >= dp_len) break;
 
-	int body_read = fSock.Receive(reinterpret_cast<char *>(&TCP_data), roesti_header.length, nflag);
+		LOG(warn) << "Irregal data size : " << dp_read << "/" << dp_len;
+		if (nflag == EAGAIN) {
+			LOG(warn) << "Timeout and Retry";
+			continue;
+		} else {
+			std::cout << "Unknown error... at data reading" << std::endl;
+			return true;
+		}
+		if (i > 3) usleep(1000 * i);
+	}
+	if (dp_read < dp_len) {
+		LOG(err) << "Insfficent size of data";
+		return true;
+	}
 
-	// std::cout << "Body read:" << hexdump(TCP_data, roesti_header.length)<< std::endl;
-	std::cout << "body read: " << body_read << std::endl;
+	//----custom hexdump
 	// hexdump(reinterpret_cast<char *>(&TCP_data), roesti_header.length);
-
 	// std::ofstream out("out.txt");
-    // std::streambuf *coutbuf = std::cout.rdbuf(); //save old buf
-    // std::cout.rdbuf(out.rdbuf()); //redirect std::cout to out.txt!
+	// std::streambuf *coutbuf = std::cout.rdbuf(); //save old buf
+	// std::cout.rdbuf(out.rdbuf()); //redirect std::cout to out.txt!
 	// std::cout << CustomHexdump<16, false>(&TCP_data, sizeof(TCP_data)) << std::endl;
-    // std::cout.rdbuf(coutbuf);
+	// std::cout.rdbuf(coutbuf);
+
+	CheckRoestiDataPacket(TCP_data, dp_read);
 
 	int FOTTERSIZE = 8;
-	char recvbuff[1024];
+	char recvbuff[16];
+	struct Roesti::RoestiFooter *pfooter = reinterpret_cast<Roesti::RoestiFooter *>(recvbuff);
 	int footer_read = fSock.Receive(reinterpret_cast<char *>(&recvbuff), FOTTERSIZE, nflag);
 
-	std::cout << "Footer: " << footer_read<< std::endl;
+	std::cout << "Footer: size:" << std::dec << footer_read
+		<< ", key: 0x" << std::hex << pfooter->footer
+		<< ", crc: 0x" << std::hex << pfooter->crc32 << std::endl;
+	std::cout << std::dec;
 
-	// // outParts.AddPart(NewMessage(sizeof(recv_header) + body_packet));
-	// // //auto &msgRBody = parts[2];
-	// // auto &msg = outParts[1];
-	// // fair::mq::Parts outParts;
-	// // outParts.AddPart(NewMessage(body_read));
-	// // Send(outParts, fOutputChannelName);
 
+	// Send all outParts
+	Send(outParts, fOutputChannelName);
+
+	return true;
 }
 
 
@@ -488,3 +493,23 @@ void RoestiSampler::Run()
 {
 	// LOG(debug) << __FUNCTION__;
 }
+
+// int main(int argc, char *argv[])
+// {
+
+// 	int n_itar = 3;
+// 	if (argc > 1) {
+// 		n_itar = std::stoi(argv[1]);
+// 	}
+
+// 	Init();
+// 	InitTask();
+// 	PreRun();
+// 	for (int i = 0 ; i < n_itar ; i++) {
+// 		ConditionalRun();
+// 		usleep(200*1000);
+// 	}
+// 	PostRun();
+
+// 	return 0;
+// }
