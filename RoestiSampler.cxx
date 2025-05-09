@@ -28,14 +28,14 @@
 #include "utility/HexDump.h"
 
 
-#define LOG(val) std::cout 
+// #define LOG(val) std::cout
 // int fTimeout_ms = 0;
 // std::string fDeviceIp = "192.168.10.19";
 // int fDataPort = 24;
 // int fControlPort = 4660;
 // int fNumDestination = 1;
 
-CliSock fSock;
+// CliSock fSock;
 
 char* buffwrap(unsigned char value){
 	static unsigned char buffer_value[4] = {0x00, 0x00, 0x00, 0x00};
@@ -323,7 +323,12 @@ bool RoestiSampler::ConditionalRun()
 
 	fair::mq::Parts outParts;
 	// struct Roesti::RoestiHeader roesti_header;
+
+	// NestDAQ header format here first
 	outParts.AddPart(NewMessage(sizeof(struct Roesti::RoestiHeader)));
+
+	
+
 	// auto &msgRoestiHeader = outParts[0];
 
 	// FairMQMessagePtr msg(NewMessage(
@@ -364,25 +369,22 @@ bool RoestiSampler::ConditionalRun()
 	// //parts.AddPart(NewMessage(hsize));
 	// //auto &msgRHeader = parts[1];
 
+	int nflag;
+
+	//---Read header
+
 	unsigned char rec_buf[40*1000];
 	struct Roesti::RoestiHeader *pheader = reinterpret_cast<struct Roesti::RoestiHeader *>(rec_buf);
 	unsigned char *TCP_data = rec_buf + sizeof(struct Roesti::RoestiHeader);
-	
-
-	int nflag;
-	int header_read;
-
 	int header_size = sizeof(struct Roesti::RoestiHeader);
 
+	int header_read = fSock.Receive(reinterpret_cast<char *>(pheader), sizeof(struct Roesti::RoestiHeader) , nflag);
 
-	header_read = fSock.Receive(reinterpret_cast<char *>(pheader), sizeof(struct Roesti::RoestiHeader) , nflag);
-
-	
-	LOG(info) << "Header data recieved: " << header_read;
+	// LOG(info) << "Header data recieved: " << header_read;
 	// LOG(warn) << "Size of defined nhsize : " << sizeof(nhsize);
 	
 	if (header_read < header_size) {
-		LOG(warn) << "Irregal data size : " << header_read << "/" << header_size;
+		LOG(warn) << "Irregal header data size : " << header_read << "/" << header_size;
 		if (nflag == EAGAIN) {
 			LOG(warn) << "Timeout and Retry";
 			int hh = fSock.Receive(reinterpret_cast<char *>(pheader) + header_read,
@@ -400,7 +402,7 @@ bool RoestiSampler::ConditionalRun()
 		}
 	}
 
-
+	std::cout<< "--------------------HEADER--------------------" << std::endl;
 	std::cout << "body length size: " << sizeof(pheader->length)
 		<< " / body length value: " << pheader->length << std::endl;
 	std::cout << "event number: " << pheader->event_num << std::endl;
@@ -413,30 +415,34 @@ bool RoestiSampler::ConditionalRun()
 	std::cout << ", Event Number: " << std::dec << pheader->event_num << std::endl;
 
 
+	//---Read data packet
+
 	unsigned int dp_read = 0;
 	unsigned int dp_len = pheader->length;
 
-	for (int i = 0 ; i < 10 ; i++) {
+	// for (int i = 0 ; i < 10 ; i++) {
 		dp_read += fSock.Receive(reinterpret_cast<char *>(TCP_data), dp_len - dp_read, nflag);
-		std::cout << "data packet read: " << dp_read << "/" << dp_len << std::endl;
-		if (dp_read >= dp_len) break;
-
-		LOG(warn) << "Irregal data size : " << dp_read << "/" << dp_len;
-		if (nflag == EAGAIN) {
-			LOG(warn) << "Timeout and Retry";
-			continue;
-		} else {
-			std::cout << "Unknown error... at data reading" << std::endl;
-			return true;
+		std::cout<< "--------------------DATA--------------------" << std::endl;
+		std::cout << "data packet read/length: " << dp_read << "/" << dp_len << std::endl;
+		
+		// if (dp_read >= dp_len) {
+		// 	LOG(warn) << "Length check: " << dp_read << "/" << dp_len;
+		// }else 
+		if (dp_read < dp_len){
+			LOG(error) << "Insufficent size of data";
+		}else{
+			if (nflag == EAGAIN) {
+				LOG(warn) << "Timeout and Retry";
+				dp_read += fSock.Receive(reinterpret_cast<char *>(TCP_data), dp_len - dp_read, nflag);
+			}
+			// else {
+			// 	LOG(warn) << "Length check: " << dp_read << "/" << dp_len;
+			// 	// std::cout << "Unknown error... at data reading" << std::endl;
+			// 	// return true;
+			// }
 		}
-		if (i > 3) usleep(1000 * i);
-	}
-	if (dp_read < dp_len) {
-		LOG(err) << "Insfficent size of data";
-		return true;
-	}
 
-	//----custom hexdump
+	//---custom hexdump
 	// hexdump(reinterpret_cast<char *>(&TCP_data), roesti_header.length);
 	// std::ofstream out("out.txt");
 	// std::streambuf *coutbuf = std::cout.rdbuf(); //save old buf
@@ -444,18 +450,25 @@ bool RoestiSampler::ConditionalRun()
 	// std::cout << CustomHexdump<16, false>(&TCP_data, sizeof(TCP_data)) << std::endl;
 	// std::cout.rdbuf(coutbuf);
 
+	//--- Unpack data
+
 	CheckRoestiDataPacket(TCP_data, dp_read);
+
+	//---Read footer
 
 	int FOTTERSIZE = 8;
 	char recvbuff[16];
 	struct Roesti::RoestiFooter *pfooter = reinterpret_cast<Roesti::RoestiFooter *>(recvbuff);
 	int footer_read = fSock.Receive(reinterpret_cast<char *>(&recvbuff), FOTTERSIZE, nflag);
 
+	std::cout<< "--------------------FOOTER--------------------" << std::endl;
 	std::cout << "Footer: size:" << std::dec << footer_read
 		<< ", key: 0x" << std::hex << pfooter->footer
 		<< ", crc: 0x" << std::hex << pfooter->crc32 << std::endl;
 	std::cout << std::dec;
 
+    //This needs to become full packet send
+	// outParts.AddPart(NewMessage(sizeof(struct Roesti::RoestiHeader)));
 
 	// Send all outParts
 	Send(outParts, fOutputChannelName);
