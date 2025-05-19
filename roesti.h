@@ -4,30 +4,12 @@
 #endif
 
 namespace Roesti {
-// network byte order
-struct Header {
-	unsigned char  type;
-	unsigned char  id;
-	unsigned short sent_num;
-	unsigned short time;
-	unsigned short len;
-	unsigned int   trig_count;
-};
 
 constexpr uint32_t MAGIC {0x89ABCDEF};
 
 #pragma pack(2)
 struct RoestiHeader{
-	// unsigned int magic=MAGIC;
-	// unsigned char  type;  //= 0xFF00
-	// unsigned char  ipaddr;
-	// unsigned int length;
-	// unsigned int  event_num;
-	// unsigned int seu_count;
-	// unsigned int mbu_count;
-	// unsigned int seu_inf_size;
-	// unsigned char seu_info;
-	
+
 	uint32_t magic       ; //{MAGIC};
 	uint16_t type        ; //{0};
 	uint16_t ipaddr      ; //{0};
@@ -72,22 +54,6 @@ struct RoestiDataBody{
 	uint8_t reserved_footer;
 };
 
-struct RoestiPacket{
-
-	char recvbuff[1024];
-	char recv_header[24];
-	int HEADERSIZE = 24;
-	int FOTTERSIZE = 8;
-
-	char EventNumber_char[4];
-	char Length_char[4];
-	char SEUinfoSize_char[2];
-	char StopNumber_char[2];
-
-	char recvbuff_fotter[1024];
-	unsigned char TCP_data[37112];
-	unsigned char data_char[2];
-};
 #pragma pack()
 
 }

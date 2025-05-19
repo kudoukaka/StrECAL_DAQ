@@ -325,7 +325,7 @@ bool RoestiSampler::ConditionalRun()
 	// struct Roesti::RoestiHeader roesti_header;
 
 	// NestDAQ header format here first
-	outParts.AddPart(NewMessage(sizeof(struct Roesti::RoestiHeader)));
+	// outParts.AddPart(NewMessage(sizeof(struct Roesti::RoestiHeader)));
 
 	
 
@@ -402,6 +402,9 @@ bool RoestiSampler::ConditionalRun()
 		}
 	}
 
+
+
+
 	std::cout<< "--------------------HEADER--------------------" << std::endl;
 	std::cout << "body length size: " << sizeof(pheader->length)
 		<< " / body length value: " << pheader->length << std::endl;
@@ -469,6 +472,27 @@ bool RoestiSampler::ConditionalRun()
 
     //This needs to become full packet send
 	// outParts.AddPart(NewMessage(sizeof(struct Roesti::RoestiHeader)));
+
+	outParts.AddPart(NewMessage(sizeof(rec_buf)));
+	auto &msgRoestiAll = outParts[0];
+
+	//---stf
+	outParts.AddPart(NewMessage(sizeof(SubTimeFrame::Header)));
+	auto &msgSTFHeader = outParts[1];
+
+	struct SubTimeFrame::Header *pstfheader
+		 = reinterpret_cast<struct SubTimeFrame::Header *>(msgSTFHeader.GetData());
+	pstfheader->magic = SubTimeFrame::Magic;
+	pstfheader->timeFrameId = static_cast<uint32_t>(pheader->event_num);
+	pstfheader->FEMType = static_cast<uint32_t>(pheader->type) & 0xff;
+	pstfheader->FEMId = static_cast<uint32_t>(pheader->ipaddr) & 0xff;
+	pstfheader->length = sizeof(struct SubTimeFrame::Header) + sizeof(struct Roesti::RoestiHeader);
+	pstfheader->numMessages = 1;
+	struct timeval now;
+	gettimeofday(&now, nullptr);
+	pstfheader->time_sec = now.tv_sec;
+	pstfheader->time_usec = now.tv_usec;
+
 
 	// Send all outParts
 	Send(outParts, fOutputChannelName);
