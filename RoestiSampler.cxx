@@ -3,6 +3,7 @@
 #include <fairmq/runDevice.h>
 
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <chrono>
 #include <cstdint>
@@ -18,7 +19,7 @@
 #include <signal.h>
 
 #include "SubTimeFrameHeader.h"
-#include "SubTimeFrameHeader.h"
+// #include "SubTimeFrameHeader.h"
 #include "roesti.h"
 
 #include "CliSock.cxx"
@@ -327,47 +328,12 @@ bool RoestiSampler::ConditionalRun()
 	// NestDAQ header format here first
 	// outParts.AddPart(NewMessage(sizeof(struct Roesti::RoestiHeader)));
 
-	
-
-	// auto &msgRoestiHeader = outParts[0];
-
-	// FairMQMessagePtr msg(NewMessage(
-	// 	const_cast<char*>(text->data()),
-	// 	text->length(),
-	// 	[](void * /*data*/, void* object) { 
-	// 	  	auto p = reinterpret_cast<std::string*>(object);
-	// 	  	delete p; }, 
-	// 	text
-	//   )
-	// );
-
-	// // outParts.AddPart(NewMessage(sizeof(recv_header) + body_packet));
-	// // //auto &msgRBody = parts[2];
-	// // auto &msg = outParts[1];
-	// // fair::mq::Parts outParts;
-	// // outParts.AddPart(NewMessage(body_read));
-
-
-	// ----------------------------------------------------------including subtimeframe 
+	// outParts.AddPart(NewMessage(sizeof(recv_header) + body_packet));
+	// //auto &msgRBody = parts[2];
+	// auto &msg = outParts[1];
 	// fair::mq::Parts outParts;
-	// outParts.AddPart(NewMessage(sizeof(SubTimeFrame::Header)));
-	// auto &msgSTFHeader = outParts[0];
+	// outParts.AddPart(NewMessage(body_read));
 
-	// LOG(warn) << "------ SubTimeFrameSize : " << sizeof(SubTimeFrame::Header);
-
-	// -----------------------------------------------------------reading to structure
-	//int data_read = 0;
-	//int data_read_size = 0;
-	
-	//struct Roesti::RoestiHeader roesti_header;
-	//int struct_header_size = sizeof(struct Roesti::RoestiHeader);
-	// int nhsize = sizeof(roesti_header.recv_header);
-
-	// struct Roesti::RoestiPacket roesti_packet;
-	// int nhsize = sizeof(struct Roesti::RoestiPacket);
-
-	// //parts.AddPart(NewMessage(hsize));
-	// //auto &msgRHeader = parts[1];
 
 	int nflag;
 
@@ -401,8 +367,6 @@ bool RoestiSampler::ConditionalRun()
 			return true;
 		}
 	}
-
-
 
 
 	std::cout<< "--------------------HEADER--------------------" << std::endl;
@@ -445,7 +409,7 @@ bool RoestiSampler::ConditionalRun()
 			// }
 		}
 
-	//---custom hexdump
+	//---custom hexdump into file from stream
 	// hexdump(reinterpret_cast<char *>(&TCP_data), roesti_header.length);
 	// std::ofstream out("out.txt");
 	// std::streambuf *coutbuf = std::cout.rdbuf(); //save old buf
@@ -473,25 +437,47 @@ bool RoestiSampler::ConditionalRun()
     //This needs to become full packet send
 	// outParts.AddPart(NewMessage(sizeof(struct Roesti::RoestiHeader)));
 
-	outParts.AddPart(NewMessage(sizeof(rec_buf)));
-	auto &msgRoestiAll = outParts[0];
-
 	//---stf
 	outParts.AddPart(NewMessage(sizeof(SubTimeFrame::Header)));
-	auto &msgSTFHeader = outParts[1];
+	auto &msgSTFHeader = outParts[0];
 
-	struct SubTimeFrame::Header *pstfheader
-		 = reinterpret_cast<struct SubTimeFrame::Header *>(msgSTFHeader.GetData());
+	struct SubTimeFrame::Header *pstfheader = reinterpret_cast<struct SubTimeFrame::Header *>(msgSTFHeader.GetData());
+
+
 	pstfheader->magic = SubTimeFrame::Magic;
 	pstfheader->timeFrameId = static_cast<uint32_t>(pheader->event_num);
 	pstfheader->FEMType = static_cast<uint32_t>(pheader->type) & 0xff;
 	pstfheader->FEMId = static_cast<uint32_t>(pheader->ipaddr) & 0xff;
-	pstfheader->length = sizeof(struct SubTimeFrame::Header) + sizeof(struct Roesti::RoestiHeader);
+	// pstfheader->length = sizeof(struct SubTimeFrame::Header) + sizeof(struct Roesti::RoestiHeader)+sizeof(rec_buf);
+	pstfheader->length =  dp_len; //sizeof(struct SubTimeFrame::Header);
 	pstfheader->numMessages = 1;
 	struct timeval now;
 	gettimeofday(&now, nullptr);
 	pstfheader->time_sec = now.tv_sec;
 	pstfheader->time_usec = now.tv_usec;
+
+	// std::cout << "-------STF HEADER VALUES--------"<< std::endl;
+	// std::cout << "Magic:" << std::hex << pstfheader->magic << std::endl;
+	// std::cout << "Event:" << std::dec << pstfheader->timeFrameId << std::endl;
+	// std::cout << "IP" << std::dec << pstfheader->FEMId << std::endl;
+
+
+	//--roesti datapacket
+	outParts.AddPart(NewMessage(sizeof(TCP_data)));
+	auto &msgRoesti = outParts[1];
+
+	struct Roesti::RoestiDataBody *roestidata = reinterpret_cast<struct Roesti::RoestiDataBody *>(msgRoesti.GetData());
+	// struct Roesti::RoestiDataBody *roestibody = reinterpret_cast<Roesti::RoestiDataBody *>(TCP_data);
+	// roestidata->data_packet_word = static_cast<uint16_t>(roestibody-> data_packet_word);
+	// roestidata->reserved_header  = static_cast<uint8_t> (roestibody-> reserved_header);
+	// roestidata->channel_num      = static_cast<uint8_t> (roestibody-> channel_num);
+	// roestidata->stop_num         = static_cast<uint16_t>(roestibody-> stop_num);
+	// roestidata->data_length      = static_cast<uint16_t>(roestibody-> data_length);
+	// roestidata->data             = static_cast<uint16_t>(roestibody-> data);
+	// roestidata->data_footer      = static_cast<uint16_t>(roestibody-> data_footer);
+	// roestidata->keyword          = static_cast<uint8_t> (roestibody-> keyword);
+	// roestidata->reserved_footer  = static_cast<uint8_t> (roestibody-> reserved_footer);
+	roestidata = reinterpret_cast<struct Roesti::RoestiDataBody *>(TCP_data);
 
 
 	// Send all outParts
@@ -531,22 +517,3 @@ void RoestiSampler::Run()
 	// LOG(debug) << __FUNCTION__;
 }
 
-// int main(int argc, char *argv[])
-// {
-
-// 	int n_itar = 3;
-// 	if (argc > 1) {
-// 		n_itar = std::stoi(argv[1]);
-// 	}
-
-// 	Init();
-// 	InitTask();
-// 	PreRun();
-// 	for (int i = 0 ; i < n_itar ; i++) {
-// 		ConditionalRun();
-// 		usleep(200*1000);
-// 	}
-// 	PostRun();
-
-// 	return 0;
-// }
