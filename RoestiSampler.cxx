@@ -1,4 +1,5 @@
 
+#include <cstring>
 #include <fairmq/Device.h>
 #include <fairmq/runDevice.h>
 
@@ -469,7 +470,8 @@ bool RoestiSampler::ConditionalRun()
 	// ppheader = reinterpret_cast<struct Roesti::DataPacketHeader *>(TCP_data);
 
 	struct Roesti::RoestiDataBody *roestidata = reinterpret_cast<struct Roesti::RoestiDataBody *>(msgRoesti.GetData());
-	roestidata = reinterpret_cast<struct Roesti::RoestiDataBody *>(TCP_data);
+	// roestidata = reinterpret_cast<struct Roesti::RoestiDataBody *>(TCP_data);
+	memcpy(roestidata, TCP_data, dp_len);
 
 
 	// Send all outParts
