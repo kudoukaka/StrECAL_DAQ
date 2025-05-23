@@ -230,36 +230,36 @@ void RoestiSampler::InitTask()
 	if(rbcp.Write( buffwrap(0xf0), RESET_INTR          , 1) > 0){ LOG(info) << "-----SET: Reset"; }	
 	if(rbcp.Write( buffwrap(31)  , DRS4_SAMPLING_SPEED , 1) > 0){ LOG(info) << "-----SET: DRS4_SAMPLING_SPEED"; }
 	if(rbcp.Write( buffwrap(0x08), ADC_RESET_SYNC      , 1) > 0){ LOG(info) << "-----SET: ADC_RESET_SYNC"; }
-    if(rbcp.Write( buffwrap(0x06), ADC_OUT_SYNC        , 1) > 0){ LOG(info) << "-----SET: ADC_OUT_SYNC"; }
-    if(rbcp.Write( buffwrap(0x3C), ADC_RESET_CH07      , 1) > 0){ LOG(info) << "-----SET: ADC_RESET_CH07"; }
-    if(rbcp.Write( buffwrap(0x3C), ADC_RESET_CH815     , 1) > 0){ LOG(info) << "-----SET: ADC_RESET_CH815"; }
-    if(rbcp.Write( buffwrap(0x03), ADC_PWM_CH07        , 1) > 0){ LOG(info) << "-----SET: ADC_PWM_CH07"; }
-    if(rbcp.Write( buffwrap(0x00), ADC_PWM_CH07        , 1) > 0){ LOG(info) << "-----SET: ADC_PWM_CH07_2"; }
+	if(rbcp.Write( buffwrap(0x06), ADC_OUT_SYNC        , 1) > 0){ LOG(info) << "-----SET: ADC_OUT_SYNC"; }
+	if(rbcp.Write( buffwrap(0x3C), ADC_RESET_CH07      , 1) > 0){ LOG(info) << "-----SET: ADC_RESET_CH07"; }
+	if(rbcp.Write( buffwrap(0x3C), ADC_RESET_CH815     , 1) > 0){ LOG(info) << "-----SET: ADC_RESET_CH815"; }
+	if(rbcp.Write( buffwrap(0x03), ADC_PWM_CH07        , 1) > 0){ LOG(info) << "-----SET: ADC_PWM_CH07"; }
+	if(rbcp.Write( buffwrap(0x00), ADC_PWM_CH07        , 1) > 0){ LOG(info) << "-----SET: ADC_PWM_CH07_2"; }
 	if(rbcp.Write( buffwrap(0x03), ADC_PWM_CH815       , 1) > 0){ LOG(info) << "-----SET: ADC_PWM_CH815"; }
 	if(rbcp.Write( buffwrap(0x00), ADC_PWM_CH815       , 1) > 0){ LOG(info) << "-----SET: ADC_PWM_CH815_2"; }
 	if(rbcp.Write( buffwrap(0x00), ADC_OUT_CH07        , 1) > 0){ LOG(info) << "-----SET: ADC_OUT_CH07 "; }
 	if(rbcp.Write( buffwrap(0x00), ADC_OUT_CH815       , 1) > 0){ LOG(info) << "-----SET: ADC_OUT_CH815"; }
 	if(rbcp.Write( buffwrap(0x00), ADC_TEST_CH07       , 1) > 0){ LOG(info) << "-----SET: ADC_TEST_CH07"; }
 	if(rbcp.Write( buffwrap(0x00), ADC_TEST_CH815      , 1) > 0){ LOG(info) << "-----SET: ADC_TEST_CH815"; }
-    if(rbcp.Write( buffwrap(0x08), THR_UPP             , 1) > 0){ LOG(info) << "-----SET: THR_UPP"; }
+	if(rbcp.Write( buffwrap(0x08), THR_UPP             , 1) > 0){ LOG(info) << "-----SET: THR_UPP"; }
 	if(rbcp.Write( buffwrap(0x00), THR_LOW             , 1) > 0){ LOG(info) << "-----SET: THR_LOW"; }
 	if(rbcp.Write( buffwrap(0x02), TRIG                , 1) > 0){ LOG(info) << "-----SET: TRIG_TYPE"; } // 0x00-off, 0x02-base, 0x04-self, 0x08-normal
 	// if(rbcp.Write( buffwrap(0x00), ADC_OUT_PHASE_CH07  , 1) > 0){ LOG(info) << "-----SET: ADC_OUT_PHASE_CH07"; }
-    // if(rbcp.Write( buffwrap(0x00), ADC_OUT_PHASE_CH815 , 1) > 0){ LOG(info) << "-----SET: ADC_OUT_PHASE_CH815"; }
+	   // if(rbcp.Write( buffwrap(0x00), ADC_OUT_PHASE_CH815 , 1) > 0){ LOG(info) << "-----SET: ADC_OUT_PHASE_CH815"; }
 	// if(rbcp.Write( buffwrap(0x3c), ASD_CHECK_START_TIME, 1) > 0){ LOG(info) << "-----SET: ASD_CHECK_START_TIME"; } // ?
 	// if(rbcp.Write( buffwrap(0x46), ASD_WAIT_WIDTH      , 1) > 0){ LOG(info) << "-----SET: ASD_WAIT_WIDTH"; } // ?
 	if(rbcp.Write( buffwrap(60), ASD_CHECK_START_TIME  , 1) > 0){ LOG(info) << "-----SET: ASD_CHECK_START_TIME"; } // ?
 	if(rbcp.Write( buffwrap(70), ASD_WAIT_WIDTH        , 1) > 0){ LOG(info) << "-----SET: ASD_WAIT_WIDTH"; } // ?
-    if(rbcp.Write( buffwrap(0x00), ZSUP                , 1) > 0){ LOG(info) << "-----SET: ZSUP"; } // 0x01-on, 0x00-off
-    if(rbcp.Write( buffwrap(0x00), DSEND               , 1) > 0){ LOG(info) << "-----SET: DSEND"; } // 0x01-on, 0x00-off
-    if(rbcp.Write( buffwrap(0x01), DAC_SYNC            , 1) > 0){ LOG(info) << "-----SET: DAC_SYNC"; }
-    if(rbcp.Write( buffwrap(0xf0), RESET_DRS           , 1) > 0){ LOG(info) << "-----SET: RESET_DRS"; }
-    if(rbcp.Write( buffwrap(0xf0), RESET_INTR          , 1) > 0){ LOG(info) << "-----SET: RESET_INTR"; }
-    if(rbcp.Write( buffwrap(0x2F), DATA_LAT            , 1) > 0){ LOG(info) << "-----SET: DATA_LAT"; }
-    if(rbcp.Write( buffwrap(0x01), DATA_RESET          , 1) > 0){ LOG(info) << "-----SET: DATA_RESET"; } //emties ADC data
-    if(rbcp.Write( buffwrap(0x04), ADC_OUT_PHASE_CH07  , 1) > 0){ LOG(info) << "-----SET: ADC_OUT_PHASE_CH07"; }
-    if(rbcp.Write( buffwrap(0x04), ADC_OUT_PHASE_CH815 , 1) > 0){ LOG(info) << "-----SET: ADC_OUT_PHASE_CH815"; }
-    if(rbcp.Write( buffwrap(0x00), DAISY_CHAIN         , 1) > 0){ LOG(info) << "-----SET: DAISY_CHAIN"; }
+	if(rbcp.Write( buffwrap(0x00), ZSUP                , 1) > 0){ LOG(info) << "-----SET: ZSUP"; } // 0x01-on, 0x00-off
+	if(rbcp.Write( buffwrap(0x00), DSEND               , 1) > 0){ LOG(info) << "-----SET: DSEND"; } // 0x01-on, 0x00-off
+	if(rbcp.Write( buffwrap(0x01), DAC_SYNC            , 1) > 0){ LOG(info) << "-----SET: DAC_SYNC"; }
+	if(rbcp.Write( buffwrap(0xf0), RESET_DRS           , 1) > 0){ LOG(info) << "-----SET: RESET_DRS"; }
+	if(rbcp.Write( buffwrap(0xf0), RESET_INTR          , 1) > 0){ LOG(info) << "-----SET: RESET_INTR"; }
+	if(rbcp.Write( buffwrap(0x2F), DATA_LAT            , 1) > 0){ LOG(info) << "-----SET: DATA_LAT"; }
+	if(rbcp.Write( buffwrap(0x01), DATA_RESET          , 1) > 0){ LOG(info) << "-----SET: DATA_RESET"; } //emties ADC data
+	if(rbcp.Write( buffwrap(0x04), ADC_OUT_PHASE_CH07  , 1) > 0){ LOG(info) << "-----SET: ADC_OUT_PHASE_CH07"; }
+	if(rbcp.Write( buffwrap(0x04), ADC_OUT_PHASE_CH815 , 1) > 0){ LOG(info) << "-----SET: ADC_OUT_PHASE_CH815"; }
+	if(rbcp.Write( buffwrap(0x00), DAISY_CHAIN         , 1) > 0){ LOG(info) << "-----SET: DAISY_CHAIN"; }
 
 	// TCP_SET
 	// // if(rbcp.Write( buffwrap(0x16a),0x01, 1) > 0){ LOG(info) << "-----SET: TCP"; }
@@ -417,7 +417,7 @@ bool RoestiSampler::ConditionalRun()
 	// std::cout << CustomHexdump<16, false>(&TCP_data, sizeof(TCP_data)) << std::endl;
 	// std::cout.rdbuf(coutbuf);
 
-	//--- Unpack data
+	//--- Unpack data packet
 
 	CheckRoestiDataPacket(TCP_data, dp_read);
 
@@ -443,9 +443,8 @@ bool RoestiSampler::ConditionalRun()
 
 	struct SubTimeFrame::Header *pstfheader = reinterpret_cast<struct SubTimeFrame::Header *>(msgSTFHeader.GetData());
 
-
 	pstfheader->magic = SubTimeFrame::Magic;
-	pstfheader->timeFrameId = static_cast<uint32_t>(pheader->event_num);
+	pstfheader->timeFrameId = pheader->event_num;
 	pstfheader->FEMType = static_cast<uint32_t>(pheader->type) & 0xff;
 	pstfheader->FEMId = static_cast<uint32_t>(pheader->ipaddr) & 0xff;
 	// pstfheader->length = sizeof(struct SubTimeFrame::Header) + sizeof(struct Roesti::RoestiHeader)+sizeof(rec_buf);
@@ -463,20 +462,13 @@ bool RoestiSampler::ConditionalRun()
 
 
 	//--roesti datapacket
-	outParts.AddPart(NewMessage(sizeof(TCP_data)));
+	outParts.AddPart(NewMessage(dp_len));
 	auto &msgRoesti = outParts[1];
 
+	// struct Roesti::DataPacketHeader *ppheader = reinterpret_cast<Roesti::DataPacketHeader *>(msgRoesti.GetData());
+	// ppheader = reinterpret_cast<struct Roesti::DataPacketHeader *>(TCP_data);
+
 	struct Roesti::RoestiDataBody *roestidata = reinterpret_cast<struct Roesti::RoestiDataBody *>(msgRoesti.GetData());
-	// struct Roesti::RoestiDataBody *roestibody = reinterpret_cast<Roesti::RoestiDataBody *>(TCP_data);
-	// roestidata->data_packet_word = static_cast<uint16_t>(roestibody-> data_packet_word);
-	// roestidata->reserved_header  = static_cast<uint8_t> (roestibody-> reserved_header);
-	// roestidata->channel_num      = static_cast<uint8_t> (roestibody-> channel_num);
-	// roestidata->stop_num         = static_cast<uint16_t>(roestibody-> stop_num);
-	// roestidata->data_length      = static_cast<uint16_t>(roestibody-> data_length);
-	// roestidata->data             = static_cast<uint16_t>(roestibody-> data);
-	// roestidata->data_footer      = static_cast<uint16_t>(roestibody-> data_footer);
-	// roestidata->keyword          = static_cast<uint8_t> (roestibody-> keyword);
-	// roestidata->reserved_footer  = static_cast<uint8_t> (roestibody-> reserved_footer);
 	roestidata = reinterpret_cast<struct Roesti::RoestiDataBody *>(TCP_data);
 
 
