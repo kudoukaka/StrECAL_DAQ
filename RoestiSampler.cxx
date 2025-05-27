@@ -342,7 +342,6 @@ bool RoestiSampler::ConditionalRun()
 
 	unsigned char rec_buf[40*1000];
 	struct Roesti::RoestiHeader *pheader = reinterpret_cast<struct Roesti::RoestiHeader *>(rec_buf);
-	unsigned char *TCP_data = rec_buf + sizeof(struct Roesti::RoestiHeader);
 	int header_size = sizeof(struct Roesti::RoestiHeader);
 
 	int header_read = fSock.Receive(reinterpret_cast<char *>(pheader), sizeof(struct Roesti::RoestiHeader) , nflag);
@@ -384,6 +383,18 @@ bool RoestiSampler::ConditionalRun()
 
 
 	//---Read data packet
+	unsigned char *TCP_data = rec_buf + sizeof(struct Roesti::RoestiHeader);
+	
+	// int body_size = static_cast<int>(ntohs(pheader->length));
+	// // int body_size = static_cast<int>(ntohs(TCP_data));
+
+	// outParts.AddPart(NewMessage(body_size+header_size));
+	// auto &msgRoesti = outParts[1];
+
+	// char *cmsgbuf = reinterpret_cast<char *>(msgRoesti.GetData());
+	// memcpy(cmsgbuf, reinterpret_cast<char *>(pheader), sizeof(struct Roesti::RoestiHeader));
+	// unsigned char *roesti_data = reinterpret_cast<unsigned char *>(TCP_data);
+
 
 	unsigned int dp_read = 0;
 	unsigned int dp_len = pheader->length;
@@ -424,10 +435,10 @@ bool RoestiSampler::ConditionalRun()
 
 	//---Read footer
 
-	int FOTTERSIZE = 8;
+	int footer_size = 8;
 	char recvbuff[16];
 	struct Roesti::RoestiFooter *pfooter = reinterpret_cast<Roesti::RoestiFooter *>(recvbuff);
-	int footer_read = fSock.Receive(reinterpret_cast<char *>(&recvbuff), FOTTERSIZE, nflag);
+	int footer_read = fSock.Receive(reinterpret_cast<char *>(&recvbuff), footer_size, nflag);
 
 	std::cout<< "--------------------FOOTER--------------------" << std::endl;
 	std::cout << "Footer: size:" << std::dec << footer_read
@@ -449,7 +460,7 @@ bool RoestiSampler::ConditionalRun()
 	pstfheader->FEMType = static_cast<uint32_t>(pheader->type) & 0xff;
 	pstfheader->FEMId = static_cast<uint32_t>(pheader->ipaddr) & 0xff;
 	// pstfheader->length = sizeof(struct SubTimeFrame::Header) + sizeof(struct Roesti::RoestiHeader)+sizeof(rec_buf);
-	pstfheader->length =  dp_len; //sizeof(struct SubTimeFrame::Header);
+	pstfheader->length =  pheader->length;//dp_len; //sizeof(struct SubTimeFrame::Header);
 	pstfheader->numMessages = 1;
 	struct timeval now;
 	gettimeofday(&now, nullptr);
@@ -463,19 +474,25 @@ bool RoestiSampler::ConditionalRun()
 
 
 	//--roesti datapacket
-	outParts.AddPart(NewMessage(dp_len));
+	outParts.AddPart(NewMessage());
 	auto &msgRoesti = outParts[1];
 
 	// struct Roesti::DataPacketHeader *ppheader = reinterpret_cast<Roesti::DataPacketHeader *>(msgRoesti.GetData());
 	// ppheader = reinterpret_cast<struct Roesti::DataPacketHeader *>(TCP_data);
-
+	
+	// struct Roesti::RoestiHeader *rhead = reinterpret_cast<struct Roesti::RoestiHeader *>(msgRoesti.GetData());
+    // memcpy(rhead, pheader, sizeof(struct Roesti::RoestiHeader));
+	
 	struct Roesti::RoestiDataBody *roestidata = reinterpret_cast<struct Roesti::RoestiDataBody *>(msgRoesti.GetData());
-	// roestidata = reinterpret_cast<struct Roesti::RoestiDataBody *>(TCP_data);
-	memcpy(roestidata, TCP_data, dp_len);
+	memcpy(roestidata, TCP_data, dp_read);
+
+	// struct Roesti::RoestiFooter *rfoot = reinterpret_cast<struct Roesti::RoestiFooter *>(msgRoesti.GetData());
+	// memcpy(rfoot, pfooter, FOTTERSIZE);
 
 
 	// Send all outParts
 	Send(outParts, fOutputChannelName);
+	LOG(warn) << "PACKET sent";
 
 	return true;
 }

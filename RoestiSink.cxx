@@ -137,7 +137,7 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
     // auto length = TotalLength(msgParts);
     // std::cout << "TotalLength:" <<length << std::endl;
     // std::vector<char> rawbuf;
-    // rawbuf.reserve(length);
+    // rawbuf.reserve(msgParts.At(1)->GetSize());
     // std::cout << "Total len for file: "<< length << std::endl;
     // FairMQParts inParts;
 
@@ -149,22 +149,40 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
         std::vector<char> rawbuf;
         rawbuf.reserve(packetSize);
 
-        LOG(debug4) << " received message parts size 0 = " << msgParts.At(0)->GetSize() << std::endl;
+        LOG(debug4) << " received message parts size [0] = " << msgParts.At(0)->GetSize();
         // LOG(debug4) << "msg size: " << msgParts.Size() << std::endl;
 
         
         auto stfHeader = reinterpret_cast<SubTimeFrame::Header*>(msgParts.At(0)->GetData());
         auto stfId     = stfHeader->timeFrameId;
-        LOG(warn) << "---STF HEADER--->" << stfHeader ;
-        LOG(debug4) << "DP length:" << stfHeader->length;
-        LOG(debug4) << "stfId(event number): "<< stfId ;
-        LOG(debug4) << "IP: "<< stfHeader->FEMId ;
+        LOG(warn) << "-----STF HEADER-----" << stfHeader ;
+        LOG(debug4) << "DataPacket length:" << stfHeader->length;
+        LOG(debug4) << "event number: "<< stfId ;
+        LOG(debug4) << "Board IP: "<< stfHeader->FEMId ;
 
-        LOG(debug4) << " received message parts size 1 = " << msgParts.At(1)->GetSize();
+
+
+        LOG(debug4) << "received message parts size [1] = " << msgParts.At(1)->GetSize();
+
         
+        // struct Roesti::RoestiHeader *rhead = reinterpret_cast<struct Roesti::RoestiHeader *>(msgParts.At(1)->GetData());
+        // LOG(warn) << "---Roesti Header Magic--->" << rhead->magic;
+        // LOG(warn) << "---Roesti Header length--->" << rhead->length;
+        // LOG(warn) << "---Roesti Header event--->" << rhead->event_num;
+        // LOG(warn) << "---Roesti Header IP--->" << rhead->ipaddr<< std::endl;
+
+
         struct Roesti::RoestiDataBody *rdpack = reinterpret_cast<Roesti::RoestiDataBody*>(msgParts.At(1)->GetData());
-        LOG(warn) << "--RoestiFooter--->" << rdpack->data_footer;
-        LOG(warn) << "---Roesti Data packet--->" << rdpack << std::endl;
+        LOG(warn) << "-----RoestiData-----";
+        LOG(debug4) << "RoestiWord->" << rdpack->data_packet_word;
+        LOG(debug4) << "RoestiCH#->" << rdpack->channel_num;
+        LOG(debug4) << "RoestiStop#->" << rdpack->channel_num;
+        LOG(debug4) << "RoestiDatalength->" << rdpack->data_length<<std::endl;
+        // LOG(debug4) << "RoestiADC->" << rdpack->data;
+        // LOG(debug4) << "RoestiFooter->" << rdpack->data_footer;
+        // LOG(debug4) << "Roestikeyword->" << rdpack->keyword<<std::endl;
+
+
 
         // std::cout << "RD word:" << std::hex << rdpack->data_packet_word << std::endl;
         // std::cout << "Data:" << rdpack->data << std::endl;
@@ -186,24 +204,35 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
         // }
 
         // ---raw buffer variant
-        // const auto ptr = reinterpret_cast<unsigned char*>(rdpack->data);
+        // const auto ptr = rdpack->data;
         // const auto ptr_next = ptr + msgParts.At(1)->GetSize();//sizeof(rdpack->data); //msgParts.Size();
-        // // // LOG(debug4) << "--raw-->" << ptr << std::endl;
+        // // // // // LOG(debug4) << "--raw-->" << ptr << std::endl;
 
-        rawbuf.insert(
-            rawbuf.end(),
-            std::make_move_iterator(reinterpret_cast<char *>(ptr)),
-            std::make_move_iterator(reinterpret_cast<char *>(ptr_next)));
+        // LOG(debug4) << "part: "<< ptr;
+        // LOG(debug4) << "part length: "<< TotalLength(ptr);
+        // LOG(debug4) << "part next: "<< ptr_next;
+        // LOG(debug4) << "part next length: "<< TotalLength(ptr_next);
 
-        if( fstr.is_open() && fopened ) {
-            fstr.write(rawbuf.data(), length);
-        }
 
-        // std::vector<char*> pStartBuffer(msgParts.At(1)->GetSize());
+
+
+        // rawbuf.insert(
+        //     rawbuf.end(),
+        //     std::make_move_iterator(reinterpret_cast<char *>(ptr)),
+        //     std::make_move_iterator(reinterpret_cast<char *>(ptr_next)));
+
+        
+
+        // if( fstr.is_open() && fopened ) {
+        //     // fstr.write(rawbuf.data(), length);
+        //     fstr.write(rawbuf.data(), packetSize);
+        // }
+
+        // std::vector<char*> pStartBuffer(rdpack->data_length);
         // memcpy(pStartBuffer, &rdpack, packetSize);
 
         // if( fstr.is_open() && fopened ) {
-        //     fstr.write(reinterpret_cast<const char*>(rdpack), sizeof(rdpack));
+        //     fstr.write(reinterpret_cast<const char*>(rdpack->data), rdpack->data_length);
         // }
 
     }
