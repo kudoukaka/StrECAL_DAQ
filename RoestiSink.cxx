@@ -1,5 +1,6 @@
 //________________________________________________________________________________________________Recbe example
 #include <chrono>
+#include <ios>
 #include <ostream>
 #include <thread>
 #include <vector>
@@ -161,27 +162,31 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
         LOG(debug4) << "Board IP: "<< stfHeader->FEMId ;
 
 
-
         LOG(debug4) << "received message parts size [1] = " << msgParts.At(1)->GetSize();
 
-        
-        // struct Roesti::RoestiHeader *rhead = reinterpret_cast<struct Roesti::RoestiHeader *>(msgParts.At(1)->GetData());
-        // LOG(warn) << "---Roesti Header Magic--->" << rhead->magic;
-        // LOG(warn) << "---Roesti Header length--->" << rhead->length;
-        // LOG(warn) << "---Roesti Header event--->" << rhead->event_num;
-        // LOG(warn) << "---Roesti Header IP--->" << rhead->ipaddr<< std::endl;
+        char *recieveBuf = reinterpret_cast<char* >(msgParts.At(1)->GetData());
 
 
-        struct Roesti::RoestiDataBody *rdpack = reinterpret_cast<Roesti::RoestiDataBody*>(msgParts.At(1)->GetData());
+        struct Roesti::RoestiHeader *rhead = reinterpret_cast<struct Roesti::RoestiHeader *>(recieveBuf);
+        LOG(debug4) << "---Roesti Header magic--->" << rhead->magic;
+        LOG(debug4) << "---Roesti Header length--->" << rhead->length;
+        LOG(debug4) << "---Roesti Header event--->" << rhead->event_num;
+        LOG(debug4) << "---Roesti Header ip--->" << std::dec << (rhead->ipaddr & 0xff00);
+        LOG(debug4) << "---Roesti Header seu--->" << std::dec << rhead->seu_count;
+        LOG(debug4) << "---Roesti Header mbu--->" << std::dec << rhead->mbu_count;
+        LOG(debug4) << "---Roesti Header seumb--->" << std::dec << rhead->seu_inf_size<< std::endl;
+
+
+
+        struct Roesti::RoestiDataBody *rdpack = reinterpret_cast<Roesti::RoestiDataBody*>(recieveBuf+sizeof(Roesti::RoestiHeader));
         LOG(warn) << "-----RoestiData-----";
         LOG(debug4) << "RoestiWord->" << rdpack->data_packet_word;
         LOG(debug4) << "RoestiCH#->" << rdpack->channel_num;
         LOG(debug4) << "RoestiStop#->" << rdpack->channel_num;
-        LOG(debug4) << "RoestiDatalength->" << rdpack->data_length<<std::endl;
-        // LOG(debug4) << "RoestiADC->" << rdpack->data;
-        // LOG(debug4) << "RoestiFooter->" << rdpack->data_footer;
-        // LOG(debug4) << "Roestikeyword->" << rdpack->keyword<<std::endl;
-
+        LOG(debug4) << "RoestiDatalength->" << rdpack->data_length;
+        LOG(debug4) << "RoestiADC->" << rdpack->data;
+        LOG(debug4) << "RoestiFooter->" << rdpack->data_footer;
+        LOG(debug4) << "Roestikeyword->" << rdpack->keyword<<std::endl;
 
 
         // std::cout << "RD word:" << std::hex << rdpack->data_packet_word << std::endl;

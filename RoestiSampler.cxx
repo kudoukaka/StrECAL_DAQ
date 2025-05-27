@@ -379,6 +379,9 @@ bool RoestiSampler::ConditionalRun()
 	std::cout << ", IP: " << std::dec << (pheader->ipaddr & 0xff00 >> 16)
 		<< "." << (pheader->ipaddr & 0xff) << std::endl;
 	std::cout << "Len: " << std::dec << pheader->length;
+	std::cout << "SEU: " << std::dec << pheader->seu_count;
+	std::cout << "SEU size: " << std::dec << pheader->seu_inf_size;
+	std::cout << "MBU: " << std::dec << pheader->mbu_count;
 	std::cout << ", Event Number: " << std::dec << pheader->event_num << std::endl;
 
 
@@ -474,20 +477,32 @@ bool RoestiSampler::ConditionalRun()
 
 
 	//--roesti datapacket
-	outParts.AddPart(NewMessage(dp_read));
+	unsigned int fullPacketSize = header_size+pheader->length+footer_size;
+	// outParts.AddPart(NewMessage(fullPacketSize));
+
+	outParts.AddPart(NewMessage(header_size+dp_len));
 	auto &msgRoesti = outParts[1];
+
+	char *msgbuf = reinterpret_cast<char *>(msgRoesti.GetData());
+	memcpy(msgbuf, pheader, header_size);
+	
+	msgbuf+=header_size;
+	memcpy(msgbuf, TCP_data, dp_len);
+
+	// char *body_packet = reinterpret_cast<char *>(msgRoesti.GetData());
+	// memcpy(body_packet, reinterpret_cast<char *>(&TCP_data), pheader->length);
 
 	// struct Roesti::DataPacketHeader *ppheader = reinterpret_cast<Roesti::DataPacketHeader *>(msgRoesti.GetData());
 	// ppheader = reinterpret_cast<struct Roesti::DataPacketHeader *>(TCP_data);
 	
 	// struct Roesti::RoestiHeader *rhead = reinterpret_cast<struct Roesti::RoestiHeader *>(msgRoesti.GetData());
-    // memcpy(rhead, pheader, sizeof(struct Roesti::RoestiHeader));
+    // memcpy(rhead, pheader, header_size);
 	
-	struct Roesti::RoestiDataBody *roestidata = reinterpret_cast<struct Roesti::RoestiDataBody *>(msgRoesti.GetData());
-	memcpy(roestidata, TCP_data, dp_read);
+	// struct Roesti::RoestiDataBody *roestidata = reinterpret_cast<struct Roesti::RoestiDataBody *>(msgRoesti.GetData());
+	// memcpy(roestidata, TCP_data, dp_read);
 
 	// struct Roesti::RoestiFooter *rfoot = reinterpret_cast<struct Roesti::RoestiFooter *>(msgRoesti.GetData());
-	// memcpy(rfoot, pfooter, FOTTERSIZE);
+	// memcpy(rfoot, pfooter, footer_size);
 
 
 	// Send all outParts
