@@ -474,7 +474,7 @@ bool RoestiSampler::ConditionalRun()
 
 
 	//--roesti datapacket
-	outParts.AddPart(NewMessage());
+	outParts.AddPart(NewMessage(dp_read));
 	auto &msgRoesti = outParts[1];
 
 	// struct Roesti::DataPacketHeader *ppheader = reinterpret_cast<Roesti::DataPacketHeader *>(msgRoesti.GetData());
