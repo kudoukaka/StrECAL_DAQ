@@ -42,6 +42,10 @@ struct DataPacketFooter {
 	uint8_t reserved;
 };
 
+struct DataPacketData{
+	uint16_t data;
+};
+
 struct RoestiDataBody{
 	uint16_t data_packet_word;
 	uint8_t reserved_header;
@@ -53,6 +57,17 @@ struct RoestiDataBody{
 	uint8_t keyword;
 	uint8_t reserved_footer;
 };
+// struct RoestiDataBody{
+// 	unsigned int data_packet_word;
+// 	unsigned int reserved_header;
+// 	unsigned int channel_num;
+// 	unsigned int  stop_num;
+// 	unsigned int  data_length;
+// 	unsigned int  data;
+// 	unsigned int  data_footer;
+// 	unsigned int  keyword;
+// 	unsigned int  reserved_footer;
+// };
 
 #pragma pack()
 

@@ -28,7 +28,7 @@
 #include "KTimer.cxx"
 #include "hexdump.cxx"
 #include "utility/HexDump.h"
-
+#include "utility/Hexdump.hpp"
 
 // #define LOG(val) std::cout
 // int fTimeout_ms = 0;
@@ -378,10 +378,10 @@ bool RoestiSampler::ConditionalRun()
 	std::cout << ", Type: 0x" << std::hex << pheader->type;
 	std::cout << ", IP: " << std::dec << (pheader->ipaddr & 0xff00 >> 16)
 		<< "." << (pheader->ipaddr & 0xff) << std::endl;
-	std::cout << "Len: " << std::dec << pheader->length;
-	std::cout << "SEU: " << std::dec << pheader->seu_count;
-	std::cout << "SEU size: " << std::dec << pheader->seu_inf_size;
-	std::cout << "MBU: " << std::dec << pheader->mbu_count;
+	std::cout << " Len: " << std::dec << pheader->length;
+	std::cout << " SEU: " << std::dec << pheader->seu_count;
+	std::cout << " SEU size: " << std::dec << pheader->seu_inf_size;
+	std::cout << " MBU: " << std::dec << pheader->mbu_count;
 	std::cout << ", Event Number: " << std::dec << pheader->event_num << std::endl;
 
 
@@ -425,8 +425,8 @@ bool RoestiSampler::ConditionalRun()
 		}
 
 	//---custom hexdump into file from stream
-	// hexdump(reinterpret_cast<char *>(&TCP_data), roesti_header.length);
-	// std::ofstream out("out.txt");
+	// hexdump(reinterpret_cast<char *>(&TCP_data), dp_read);
+	// std::ofstream out("./dataout/procout.dat");
 	// std::streambuf *coutbuf = std::cout.rdbuf(); //save old buf
 	// std::cout.rdbuf(out.rdbuf()); //redirect std::cout to out.txt!
 	// std::cout << CustomHexdump<16, false>(&TCP_data, sizeof(TCP_data)) << std::endl;
@@ -435,6 +435,12 @@ bool RoestiSampler::ConditionalRun()
 	//--- Unpack data packet
 
 	CheckRoestiDataPacket(TCP_data, dp_read);
+	
+	// check buffer with output to file
+	// std::ofstream outputFile("./dataout/datapacket.bin", std::ios::binary); 
+	// outputFile.write(reinterpret_cast<char *>(TCP_data), dp_len);
+	// // outputFile.write(reinterpret_cast<char *>(pheader),sizeof(struct Roesti::RoestiHeader));
+    // outputFile.close();
 
 	//---Read footer
 
@@ -476,19 +482,22 @@ bool RoestiSampler::ConditionalRun()
 	// std::cout << "IP" << std::dec << pstfheader->FEMId << std::endl;
 
 
-	//--roesti datapacket
-	unsigned int fullPacketSize = header_size+pheader->length+footer_size;
-	// outParts.AddPart(NewMessage(fullPacketSize));
+	//--roesti header+ datapacket exact
+	unsigned int fullPacketSize = sizeof(struct Roesti::RoestiHeader) + sizeof(Roesti::DataPacketHeader) 
+	                              + pheader->length + sizeof(Roesti::DataPacketFooter);
+	outParts.AddPart(NewMessage(fullPacketSize));
 
-	outParts.AddPart(NewMessage(header_size+dp_len));
+	// outParts.AddPart(NewMessage(sizeof(rec_buf)));
 	auto &msgRoesti = outParts[1];
 
 	char *msgbuf = reinterpret_cast<char *>(msgRoesti.GetData());
-	memcpy(msgbuf, pheader, header_size);
-	
-	msgbuf+=header_size;
+	// memcpy(msgbuf, rec_buf, sizeof(rec_buf));
+	memcpy(msgbuf, pheader, sizeof(struct Roesti::RoestiHeader));
+	msgbuf+=sizeof(struct Roesti::RoestiHeader);
 	memcpy(msgbuf, TCP_data, dp_len);
 
+
+	
 	// char *body_packet = reinterpret_cast<char *>(msgRoesti.GetData());
 	// memcpy(body_packet, reinterpret_cast<char *>(&TCP_data), pheader->length);
 

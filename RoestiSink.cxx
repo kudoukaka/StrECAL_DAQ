@@ -22,6 +22,9 @@
 #include "roesti.h"
 
 
+#include "hexdump.cxx"
+#include "utility/Hexdump.hpp"
+
 // static constexpr std::string_view MyClass{"RoestiSink"};
 
 namespace bpo = boost::program_options;
@@ -146,9 +149,9 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
      if (Receive(msgParts, fInputChannelName, 0, 1) > 0) {
         // assert(msgParts.Size() >= 2);
         
-        auto packetSize = msgParts.At(1)->GetSize();
-        std::vector<char> rawbuf;
-        rawbuf.reserve(packetSize);
+        // auto packetSize = msgParts.At(1)->GetSize();
+        // std::vector<char> rawbuf;
+        // rawbuf.reserve(packetSize);
 
         LOG(debug4) << " received message parts size [0] = " << msgParts.At(0)->GetSize();
         // LOG(debug4) << "msg size: " << msgParts.Size() << std::endl;
@@ -167,32 +170,67 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
         char *recieveBuf = reinterpret_cast<char* >(msgParts.At(1)->GetData());
 
 
+        // hexdump(recieveBuf, msgParts.At(1)->GetSize());
+
         struct Roesti::RoestiHeader *rhead = reinterpret_cast<struct Roesti::RoestiHeader *>(recieveBuf);
-        LOG(debug4) << "---Roesti Header magic--->" << rhead->magic;
-        LOG(debug4) << "---Roesti Header length--->" << rhead->length;
-        LOG(debug4) << "---Roesti Header event--->" << rhead->event_num;
-        LOG(debug4) << "---Roesti Header ip--->" << std::dec << (rhead->ipaddr & 0xff00);
-        LOG(debug4) << "---Roesti Header seu--->" << std::dec << rhead->seu_count;
-        LOG(debug4) << "---Roesti Header mbu--->" << std::dec << rhead->mbu_count;
-        LOG(debug4) << "---Roesti Header seumb--->" << std::dec << rhead->seu_inf_size<< std::endl;
+        LOG(warn) << "-----Roesti Header-----";
+        LOG(debug4) << "Roesti Header magic--->" << rhead->magic;
+        LOG(debug4) << "Roesti Header length--->" << rhead->length;
+        LOG(debug4) << "Roesti Header event--->" << rhead->event_num;
+        LOG(debug4) << "Roesti Header ip--->" << static_cast<uint32_t>(rhead->ipaddr & 0xff);
+        LOG(debug4) << "Roesti Header seu--->" << rhead->seu_count;
+        LOG(debug4) << "Roesti Header mbu--->" << rhead->mbu_count;
+        LOG(debug4) << "Roesti Header seumb--->" << rhead->seu_inf_size;
 
 
 
-        struct Roesti::RoestiDataBody *rdpack = reinterpret_cast<Roesti::RoestiDataBody*>(recieveBuf+sizeof(Roesti::RoestiHeader));
-        LOG(warn) << "-----RoestiData-----";
-        LOG(debug4) << "RoestiWord->" << rdpack->data_packet_word;
-        LOG(debug4) << "RoestiCH#->" << rdpack->channel_num;
-        LOG(debug4) << "RoestiStop#->" << rdpack->channel_num;
-        LOG(debug4) << "RoestiDatalength->" << rdpack->data_length;
-        LOG(debug4) << "RoestiADC->" << rdpack->data;
-        LOG(debug4) << "RoestiFooter->" << rdpack->data_footer;
-        LOG(debug4) << "Roestikeyword->" << rdpack->keyword<<std::endl;
+        // struct Roesti::RoestiDataBody *rdpack = reinterpret_cast<Roesti::RoestiDataBody*>(recieveBuf+sizeof(Roesti::RoestiHeader));
+        // LOG(warn) << "-----Roesti Data-----";
+        // LOG(debug4) << "RoestiWord->" << rdpack->data_packet_word;
+        // LOG(debug4) << "RoestiCH#->" << rdpack->channel_num;
+        // LOG(debug4) << "RoestiStop#->" << rdpack->channel_num;
+        // LOG(debug4) << "RoestiDatalength->" << rdpack->data_length;
+        // LOG(debug4) << "RoestiADC->" << rdpack->data;
+        // LOG(debug4) << "RoestiFooter->" << rdpack->data_footer;
+        // LOG(debug4) << "Roestikeyword->" << rdpack->keyword<<std::endl;
+
+        
+        // cycle through channels??? until recieve buffer == rhead->length
+
+        struct Roesti::DataPacketHeader *rdpackhead = reinterpret_cast<Roesti::DataPacketHeader *>(recieveBuf+sizeof(struct Roesti::RoestiHeader));
+        LOG(debug4) << "DataPackHeader Word->" << rdpackhead->data_packet_word;
+        LOG(debug4) << "DataPackHeader CH#->" << static_cast<unsigned int>(rdpackhead->channel_num);
+        LOG(debug4) << "DataPackHeader Stop#->" << rdpackhead->stop_num;
+        LOG(debug4) << "DataPackHeader DataLength->" << rdpackhead->data_length;
+
+
+        struct Roesti::DataPacketData *rdpackdata = reinterpret_cast<Roesti::DataPacketData*>(recieveBuf
+                                                                                              +sizeof(struct Roesti::RoestiHeader)
+                                                                                              +sizeof(struct Roesti::DataPacketHeader));
+        LOG(debug4) << "DATA->" << rdpackdata->data;
+        // LOG(debug4) << "----DataBufferSize" << sizeof(rdpackdata->data);
+
+
+
+        struct Roesti::DataPacketFooter *rdpackfooter = reinterpret_cast<Roesti::DataPacketFooter *>(recieveBuf
+                                                                                                    +sizeof(struct Roesti::RoestiHeader)
+                                                                                                    +sizeof(struct Roesti::DataPacketHeader)
+                                                                                                    +rdpackhead->data_length );
+        LOG(debug4) << "DataPackFooter Word->" << rdpackfooter->footer;
+        
+
+        //----check input with file
+        // char *dbody = reinterpret_cast<char* >(recieveBuf);
+        // dbody += sizeof(recieveBuf) + sizeof(struct Roesti::RoestiHeader)+sizeof(struct Roesti::DataPacketHeader);
+        // std::ofstream outputFile("./dataout/input_body.bin", std::ios::binary);
+        // outputFile.write(dbody,rdpackhead->data_length);
+        // outputFile.close();
 
 
         // std::cout << "RD word:" << std::hex << rdpack->data_packet_word << std::endl;
         // std::cout << "Data:" << rdpack->data << std::endl;
         
-        // rawbuf.reserve(rdpack->data_packet_word);
+        // rawbuf.reserve(rdpackhead->data_length);
         // vectorBuffer.reserve(TotalLength(msgParts.At(1)->GetData()));
         // memcpy(pStartBuffer, &rdpack, msgParts.At(1)->GetSize());
 
@@ -209,35 +247,30 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
         // }
 
         // ---raw buffer variant
-        // const auto ptr = rdpack->data;
+        // const auto ptr = rdpackdata->data;
         // const auto ptr_next = ptr + msgParts.At(1)->GetSize();//sizeof(rdpack->data); //msgParts.Size();
-        // // // // // LOG(debug4) << "--raw-->" << ptr << std::endl;
-
+        // // // // LOG(debug4) << "--raw-->" << ptr << std::endl;
         // LOG(debug4) << "part: "<< ptr;
         // LOG(debug4) << "part length: "<< TotalLength(ptr);
         // LOG(debug4) << "part next: "<< ptr_next;
         // LOG(debug4) << "part next length: "<< TotalLength(ptr_next);
-
-
-
-
         // rawbuf.insert(
         //     rawbuf.end(),
         //     std::make_move_iterator(reinterpret_cast<char *>(ptr)),
         //     std::make_move_iterator(reinterpret_cast<char *>(ptr_next)));
-
-        
 
         // if( fstr.is_open() && fopened ) {
         //     // fstr.write(rawbuf.data(), length);
         //     fstr.write(rawbuf.data(), packetSize);
         // }
 
-        // std::vector<char*> pStartBuffer(rdpack->data_length);
-        // memcpy(pStartBuffer, &rdpack, packetSize);
+        
+        // char* pStartBuffer ; //= reinterpret_cast<char *>(rdpackdata);
+        // memcpy(pStartBuffer, &rdpackdata, rhead->length);
 
         // if( fstr.is_open() && fopened ) {
-        //     fstr.write(reinterpret_cast<const char*>(rdpack->data), rdpack->data_length);
+        //     // fstr.write(reinterpret_cast<const char*>(rdpack->data), rdpack->data_length);
+        //     fstr.write(pStartBuffer, rdpackhead->data_length);
         // }
 
     }
@@ -356,10 +389,10 @@ void RoestiSink::PreRun()
     //  std::string filename = "run" + rnumber + ".dat";
     //  fstr.open(filename.data(), std::ios::binary);
 
-    char filename[256];
-    sprintf(filename, "./dataout/run%06d.dat", stoi(rnumber));
-    fstr.open(filename, std::ios::binary);
-    fopened = true;
+    // char filename[256];
+    // sprintf(filename, "./dataout/run%06d.dat", stoi(rnumber));
+    // fstr.open(filename, std::ios::binary);
+    // fopened = true;
 
 }
 //_____________________________________________________________________________
