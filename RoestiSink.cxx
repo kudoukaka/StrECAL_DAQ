@@ -195,29 +195,40 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
         // LOG(debug4) << "Roestikeyword->" << rdpack->keyword<<std::endl;
 
         
-        // cycle through channels??? until recieve buffer == rhead->length
+        unsigned int packet_read = 0;
+        unsigned int packets_full_length = rhead->length;
+        char *datapackets = reinterpret_cast<char* >(recieveBuf+sizeof(struct Roesti::RoestiHeader));
 
-        struct Roesti::DataPacketHeader *rdpackhead = reinterpret_cast<Roesti::DataPacketHeader *>(recieveBuf+sizeof(struct Roesti::RoestiHeader));
-        LOG(debug4) << "DataPackHeader Word->" << rdpackhead->data_packet_word;
-        LOG(debug4) << "DataPackHeader CH#->" << static_cast<unsigned int>(rdpackhead->channel_num);
-        LOG(debug4) << "DataPackHeader Stop#->" << rdpackhead->stop_num;
-        LOG(debug4) << "DataPackHeader DataLength->" << rdpackhead->data_length;
+        while(packet_read < packets_full_length){
+    
+            struct Roesti::DataPacketHeader *rdpackhead = reinterpret_cast<Roesti::DataPacketHeader *>(datapackets);
+            LOG(debug4) << "DataPackHeader Word->" << rdpackhead->data_packet_word;
+            LOG(debug4) << "DataPackHeader CH#->" << static_cast<unsigned int>(rdpackhead->channel_num);
+            LOG(debug4) << "DataPackHeader Stop#->" << rdpackhead->stop_num;
+            LOG(debug4) << "DataPackHeader DataLength->" << rdpackhead->data_length;
 
 
-        struct Roesti::DataPacketData *rdpackdata = reinterpret_cast<Roesti::DataPacketData*>(recieveBuf
-                                                                                              +sizeof(struct Roesti::RoestiHeader)
+            struct Roesti::DataPacketData *rdpackdata = reinterpret_cast<Roesti::DataPacketData*>(datapackets
                                                                                               +sizeof(struct Roesti::DataPacketHeader));
-        LOG(debug4) << "DATA->" << rdpackdata->data;
-        // LOG(debug4) << "----DataBufferSize" << sizeof(rdpackdata->data);
+            LOG(debug4) << "DATA->" << rdpackdata->data;
+            // LOG(debug4) << "----DataBufferSize" << sizeof(rdpackdata->data);
 
-
-
-        struct Roesti::DataPacketFooter *rdpackfooter = reinterpret_cast<Roesti::DataPacketFooter *>(recieveBuf
-                                                                                                    +sizeof(struct Roesti::RoestiHeader)
+            struct Roesti::DataPacketFooter *rdpackfooter = reinterpret_cast<Roesti::DataPacketFooter *>(datapackets
                                                                                                     +sizeof(struct Roesti::DataPacketHeader)
                                                                                                     +rdpackhead->data_length );
-        LOG(debug4) << "DataPackFooter Word->" << rdpackfooter->footer;
+            LOG(debug4) << "DataPackFooter Word->" << rdpackfooter->footer;
+
+            packet_read += sizeof(struct Roesti::DataPacketHeader)+rdpackhead->data_length + sizeof(struct Roesti::DataPacketFooter);
+            datapackets += sizeof(struct Roesti::DataPacketHeader)+rdpackhead->data_length + sizeof(struct Roesti::DataPacketFooter);
+
+        }
         
+        
+        // struct Roesti::RoestiDataPacket *rfullpack = reinterpret_cast<Roesti::RoestiDataPacket* >(recieveBuf+sizeof(struct Roesti::RoestiHeader));
+        // LOG(debug4) << "DataPackHeader Word->" << rfullpack->data_packet_word;
+        // LOG(debug4) << "DataPackHeader CH#->" << static_cast<unsigned int>(rfullpack->channel_num);
+        // LOG(debug4) << "DataPackHeader Stop#->" << rfullpack->stop_num;
+        // LOG(debug4) << "DataPackFooter Word->" << rfullpack->data_footer;
 
         //----check input with file
         // char *dbody = reinterpret_cast<char* >(recieveBuf);
