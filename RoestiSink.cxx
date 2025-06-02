@@ -124,9 +124,6 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
     // outfile.write(buffer, bytes_received);
     // outfile.close();
 
-
-
-
     // for (const auto& msg : msgParts) {
     //     const auto ptr = reinterpret_cast<char*>(msg->GetData());
     //     std::string s(ptr, ptr+msg->GetSize());
@@ -145,8 +142,8 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
     // std::cout << "Total len for file: "<< length << std::endl;
     // FairMQParts inParts;
 
-
-     if (Receive(msgParts, fInputChannelName, 0, 1) > 0) {
+    // --why recieve fires second time???
+    //  if (Receive(msgParts, fInputChannelName, 0, 1) > 0) {
         // assert(msgParts.Size() >= 2);
         
         LOG(warn) << "----------------msgSize----->" << msgParts.Size();
@@ -156,6 +153,9 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
 
         LOG(debug4) << " received message parts size [0] = " << msgParts.At(0)->GetSize();
         // LOG(debug4) << "msg size: " << msgParts.Size() << std::endl;
+        LOG(debug4) << "received message parts size [1] = " << msgParts.At(1)->GetSize();
+        // LOG(debug4) << "received message parts size [2] = " << msgParts.At(2)->GetSize();
+        // LOG(debug4) << "received message parts size [3] = " << msgParts.At(3)->GetSize();
 
         
         auto stfHeader = reinterpret_cast<SubTimeFrame::Header*>(msgParts.At(0)->GetData());
@@ -166,8 +166,7 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
         LOG(debug4) << "Board IP: "<< stfHeader->FEMId ;
 
 
-        LOG(debug4) << "received message parts size [1] = " << msgParts.At(1)->GetSize();
-
+        
         char *recieveBuf = reinterpret_cast<char* >(msgParts.At(1)->GetData());
 
 
@@ -254,7 +253,7 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
             
             // ch_iter++;
             
-        }
+        // }
 
         // LOG(warn) << "-------------------------Vector 0: "<<data_packs_content.at(0);
         // LOG(warn) << "-------------------------Vector 1: "<<data_packs_content.at(1);
@@ -487,152 +486,3 @@ void RoestiSink::PostRun()
     }
 
 }
-
-
-// ________________________________________________________________________________________________________________________Multipart simple example
-// #include <chrono>
-// #include <thread>
-
-// #include <fairmq/runFairMQDevice.h>
-
-// #include "RoestiSink.h"
-
-// static constexpr std::string_view MyClass{"RoestiSink"};
-
-// namespace bpo = boost::program_options;
-
-// //_____________________________________________________________________________
-// void addCustomOptions(bpo::options_description &options)
-// {
-//     using opt = RoestiSink::OptionKey;
-//     options.add_options()
-//     (opt::InputChannelName.data(), bpo::value<std::string>()->default_value(opt::InputChannelName.data()), "Name of input channel\n")
-//     //
-//     (opt::Multipart.data(), bpo::value<std::string>()->default_value("true"), "Handle multipart message\n");
-// }
-
-// //_____________________________________________________________________________
-// FairMQDevicePtr getDevice(const FairMQProgOptions &)
-// {
-//     return new RoestiSink;
-// }
-
-// //_____________________________________________________________________________
-// void PrintConfig(const fair::mq::ProgOptions* config, std::string_view name, std::string_view funcname)
-// {
-//     auto c = config->GetPropertiesAsStringStartingWith(name.data());
-//     std::ostringstream ss;
-//     ss << funcname << "\n\t " << name << "\n";
-//     for (const auto &[k, v] : c) {
-//         ss << "\t key = " << k << ", value = " << v << "\n";
-//     }
-//     LOG(debug) << ss.str();
-// }
-
-// //_____________________________________________________________________________
-// bool RoestiSink::HandleData(FairMQMessagePtr &msg, int index)
-// {
-//     const auto ptr = reinterpret_cast<char*>(msg->GetData());
-//     std::string s(ptr, ptr+msg->GetSize());
-//     LOG(debug) << __FUNCTION__ << " received = " << s << " [" << index << "] " << fNumMessages;
-//     ++fNumMessages;
-//     return true;
-// }
-
-// //_____________________________________________________________________________
-// bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
-// {
-//     for (const auto& msg : msgParts) {
-//         const auto ptr = reinterpret_cast<char*>(msg->GetData());
-//         std::string s(ptr, ptr+msg->GetSize());
-//         LOG(debug) << __FUNCTION__ << " received = " << s << " [" << index << "] " << fNumMessages;
-//         LOG(debug) << s;
-//         ++fNumMessages;
-//     }
-//     return true;
-// }
-
-// //_____________________________________________________________________________
-// void RoestiSink::Init()
-// {
-//     PrintConfig(fConfig, "channel-config", __PRETTY_FUNCTION__);
-//     PrintConfig(fConfig, "chans.", __PRETTY_FUNCTION__);
-
-//     fNumMessages = 0;
-// }
-
-// //_____________________________________________________________________________
-// void RoestiSink::InitTask()
-// {
-//     PrintConfig(fConfig, "channel-config", __PRETTY_FUNCTION__);
-//     PrintConfig(fConfig, "chans.", __PRETTY_FUNCTION__);
-
-//     LOG(debug) << MyClass << " InitTask";
-//     using opt = OptionKey;
-
-//     fInputChannelName = fConfig->GetProperty<std::string>(opt::InputChannelName.data());
-//     LOG(debug) << " input channel = " << fInputChannelName;
-
-//     const auto &isMultipart = fConfig->GetProperty<std::string>(opt::Multipart.data());
-//     if (isMultipart=="true" || isMultipart=="1") {
-//         LOG(warn) << " set multipart data handler";
-//         OnData(fInputChannelName, &RoestiSink::HandleMultipartData);
-//     } else {
-//         LOG(warn) << " set data handler";
-//         OnData(fInputChannelName, &RoestiSink::HandleData);
-//     }
-
-// }
-
-
-// //_____________________________________________________________________________
-// void RoestiSink::PreRun()
-// {
-//     const auto rnumber = fConfig->GetProperty<std::string>("run_number");
-//     LOG(debug) << "run_number: " << rnumber;
-
-//     // char filename[256];
-//     // sprintf(filename, "./data/run%06d.dat", stoi(rnumber));
-//     // fstr.open(filename, std::ios::binary);
-//     // fopened = true;
-
-// }
-
-// //_____________________________________________________________________________
-// void RoestiSink::PostRun()
-// {
-//     using opt = OptionKey;
-//     LOG(debug) << __func__;
-//     int nrecv=0;
-//     while (true) {
-//         const auto &isMultipart = fConfig->GetProperty<std::string>(opt::Multipart.data());
-//         if (isMultipart=="true" || isMultipart=="1") {
-//             FairMQParts parts;
-//             if (Receive(parts, fInputChannelName) <= 0) {
-//                 LOG(debug) << __func__ << " no data received " << nrecv;
-//                 ++nrecv;
-//                 if (nrecv>10) {
-//                     break;
-//                 }
-//                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
-//             } else {
-//                 LOG(debug) << __func__ << " print data";
-//                 HandleMultipartData(parts, 0);
-//             }
-//         } else {
-//             FairMQMessagePtr msg(NewMessage());
-//             if (Receive(msg, fInputChannelName) <= 0) {
-//                 LOG(debug) << __func__ << " no data received " << nrecv;
-//                 ++nrecv;
-//                 if (nrecv>10) {
-//                     break;
-//                 }
-//                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
-//             } else {
-//                 LOG(debug) << __func__ << " print data";
-//                 HandleData(msg, 0);
-//             }
-//         }
-//         LOG(debug) << __func__ << " done";
-//     }
-// }
