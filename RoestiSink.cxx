@@ -13,6 +13,13 @@
 #include <algorithm>
 #include <string>
 
+
+#include "TBufferFile.h"
+#include "TFile.h"
+#include "TTree.h"
+#include "TLeaf.h" 
+#include "TObject.h"
+
 #include <fairmq/runFairMQDevice.h>
 // #include <fairmq/runDevice.h>
 // #include <fairmq/Device.h>
@@ -137,38 +144,50 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
     // ---raw buffer variant
     // auto length = TotalLength(msgParts);
     // std::cout << "TotalLength:" <<length << std::endl;
-    // std::vector<char> rawbuf;
-    // rawbuf.reserve(msgParts.At(1)->GetSize());
+    std::vector<char> rawbuf;
+    int full_size = msgParts.At(0)->GetSize() + msgParts.At(1)->GetSize();
+    rawbuf.reserve(full_size);
     // std::cout << "Total len for file: "<< length << std::endl;
     // FairMQParts inParts;
+
+    // TFile rfl("tree.root","recreate");
+    // rfl->WriteObject(hist, "MyHist");
+    
+    TFile* rtfile = new TFile("buffer_output.root", "RECREATE");
+    if (rtfile->IsZombie()) {
+        std::cerr << "Error creating ROOT file!" << std::endl;
+        return 1;
+    }
+    
+    TTree* tree = new TTree("chunkTree", "Tree with chunked buffer data");
+
+    // Create a TTree to hold the buffer data
+    // TTree* tree = new TTree("bufferTree", "Tree storing buffer data");
+    // float value;  // Temporary variable for tree branch
+    // tree->Branch("value", &value, "value/F");
+
 
     // --why recieve fires second time???
     //  if (Receive(msgParts, fInputChannelName, 0, 1) > 0) {
         // assert(msgParts.Size() >= 2);
         
-        LOG(warn) << "----------------msgSize----->" << msgParts.Size();
+        // LOG(warn) << "----------------msgSize----->" << msgParts.Size();
         // auto packetSize = msgParts.At(1)->GetSize();
-        // std::vector<char> rawbuf;
-        // rawbuf.reserve(packetSize);
 
         LOG(debug4) << " received message parts size [0] = " << msgParts.At(0)->GetSize();
         // LOG(debug4) << "msg size: " << msgParts.Size() << std::endl;
         LOG(debug4) << "received message parts size [1] = " << msgParts.At(1)->GetSize();
-        // LOG(debug4) << "received message parts size [2] = " << msgParts.At(2)->GetSize();
-        // LOG(debug4) << "received message parts size [3] = " << msgParts.At(3)->GetSize();
 
         
         auto stfHeader = reinterpret_cast<SubTimeFrame::Header*>(msgParts.At(0)->GetData());
         auto stfId     = stfHeader->timeFrameId;
-        LOG(warn) << "-----STF HEADER-----" << stfHeader ;
+        LOG(warn) << "-----STF HEADER-----" << stfHeader;
         LOG(debug4) << "DataPacket length:" << stfHeader->length;
-        LOG(debug4) << "event number: "<< stfId ;
-        LOG(debug4) << "Board IP: "<< stfHeader->FEMId ;
+        LOG(debug4) << "event number: "<< stfId;
+        LOG(debug4) << "Board IP: "<< stfHeader->FEMId;
 
 
-        
         char *recieveBuf = reinterpret_cast<char* >(msgParts.At(1)->GetData());
-
 
         // hexdump(recieveBuf, msgParts.At(1)->GetSize());
 
@@ -182,7 +201,8 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
         LOG(debug4) << "Roesti Header mbu--->" << rhead->mbu_count;
         LOG(debug4) << "Roesti Header seumb--->" << rhead->seu_inf_size;
 
-
+        // Create ROOT file from an existing buffer
+        // TBufferFile *bufFromBuffer = new TBufferFile(TBuffer::kWrite, full_size, recieveBuf);
 
         // struct Roesti::RoestiDataBody *rdpack = reinterpret_cast<Roesti::RoestiDataBody*>(recieveBuf+sizeof(Roesti::RoestiHeader));
         // LOG(warn) << "-----Roesti Data-----";
@@ -194,22 +214,41 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
         // LOG(debug4) << "RoestiFooter->" << rdpack->data_footer;
         // LOG(debug4) << "Roestikeyword->" << rdpack->keyword<<std::endl;
 
+
+
+        // Create a TBufferFile (used to simulate writing with TFileBuffer-like logic)
+        // TBufferFile rtbuff(TBuffer::kWrite);
+
+        // // Write buffer size and data manually to the TBuffer
+        // int buffer_size = msgParts.At(1)->GetSize();
+        // rtbuff.WriteInt(buffer_size);
+        // rtbuff.WriteObject(msgParts.At(1)->GetData(), buffer_size);
+
+        // // Now write this buffer as a binary blob into the ROOT file
+        // rtfile->WriteObject(&rtbuff, "RawBuffer");
+
+        // rtfile->Close();
+
+
         //-define buffer boundries
         unsigned int packet_read = 0;
         unsigned int packets_full_length = rhead->length;
         char *datapackets = reinterpret_cast<char* >(recieveBuf+sizeof(struct Roesti::RoestiHeader));
 
         //-vector for saving data
-        std::vector<char> data_packs_content ;
-        data_packs_content.clear();
+        // std::vector<char> data_packs_content ;
+        // data_packs_content.clear();
         // data_packs_content.reserve(packets_full_length);
-        // int ch_iter = 0;
+        int ch_iter = 0;
+       
+        const int CHUNK_SIZE = 2048;
+        const int NUM_BRANCHES = 18;
+        char* chunks[NUM_BRANCHES];
+        chunks[ch_iter] = new char[CHUNK_SIZE];
         std::cout<< "--------------------DATA--------------------" << std::endl;
         while(packet_read < packets_full_length){
             std::cout << "data packet read/length: " << packet_read << "/" << packets_full_length << std::endl;
             
-            // data_packs_content.reserve(packets_full_length);
-
             struct Roesti::DataPacketHeader *rdpackhead = reinterpret_cast<Roesti::DataPacketHeader *>(datapackets);
             // LOG(debug4) << "DataPackHeader Word->" << rdpackhead->data_packet_word;
             // LOG(debug4) << "DataPackHeader CH#->" << static_cast<unsigned int>(rdpackhead->channel_num);
@@ -251,13 +290,23 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
 
             datapackets += sizeof(struct Roesti::DataPacketHeader)+rdpackhead->data_length + sizeof(struct Roesti::DataPacketFooter);
             
-            // ch_iter++;
             
-        // }
 
-        // LOG(warn) << "-------------------------Vector 0: "<<data_packs_content.at(0);
-        // LOG(warn) << "-------------------------Vector 1: "<<data_packs_content.at(1);
         
+            std::string branchName = "chunk" + std::to_string(ch_iter);
+            tree->Branch(branchName.c_str(), chunks[ch_iter], (branchName + "[" + std::to_string(CHUNK_SIZE) + "]/B").c_str());
+
+            // std::memcpy(chunks[i], &datapackets, packet_read);
+            std::memcpy(chunks[ch_iter] , &datapackets, 2048);
+
+            //Fill the tree
+            tree->Fill();
+            ch_iter++;
+        }
+
+        tree->Write();
+        rtfile->Close();
+
         //-cast to full packet struct, data size wrong
         // struct Roesti::RoestiDataPacket *rfullpack = reinterpret_cast<Roesti::RoestiDataPacket* >(recieveBuf+sizeof(struct Roesti::RoestiHeader));
         // LOG(debug4) << "DataPackHeader Word->" << rfullpack->data_packet_word;
@@ -273,11 +322,12 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
         // outputFile.close();
 
         
-        // rawbuf.reserve(rdpackhead->data_length);
         // vectorBuffer.reserve(TotalLength(msgParts.At(1)->GetData()));
         // memcpy(pStartBuffer, &rdpack, msgParts.At(1)->GetSize());
 
-        // rawbuf.insert(rawbuf.end(), reinterpret_cast<const char*>(rdpack->data), reinterpret_cast<const char*>(rdpack->data)+ sizeof(rdpack->data));
+        // rawbuf.insert(rawbuf.end(), 
+        //                 reinterpret_cast<const char*>(rdpack->data), 
+        //                 reinterpret_cast<const char*>(rdpack->data)+sizeof(rdpack->data));
 
         // if (fTFBuffer.find(stfId) == fTFBuffer.end()) {
         //     fTFBuffer[stfId].reserve(fNumSource);
@@ -302,10 +352,10 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
         //     std::make_move_iterator(reinterpret_cast<char *>(ptr)),
         //     std::make_move_iterator(reinterpret_cast<char *>(ptr_next)));
 
-        // if( fstr.is_open() && fopened ) {
-        //     // fstr.write(rawbuf.data(), length);
-        //     fstr.write(rawbuf.data(), packetSize);
-        // }
+        if( fstr.is_open() && fopened ) {
+            // fstr.write(rawbuf.data(), length);
+            fstr.write(reinterpret_cast<char* >(recieveBuf), msgParts.At(1)->GetSize());
+        }
 
         // ---memcp to buffer variant
         // char* pStartBuffer ; //= reinterpret_cast<char *>(rdpackdata);
@@ -316,56 +366,15 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
         //     fstr.write(pStartBuffer, rdpackhead->data_length);
         // }
 
-    }
-
-
-
-    // // bool fSave = true;
-
-    // auto length = TotalLength(msgParts);
-    // std::vector<char> rawbuf;
-    // rawbuf.reserve(length);
-    // std::cout << "Total len for file: "<< length << std::endl;
-
-    // for (const auto& msg : msgParts) {
-
-    // //     if(!fSave) {
-    //         // const auto ptr = reinterpret_cast<unsigned char*>(msg->GetData());
-    //         //    std::string s(ptr, ptr+msg->GetSize());
-    //         //    LOG(debug) << __FUNCTION__ << " received = " << s << " [" << index << "] "
-    //         //    << fNumMessages;
-    //         //    LOG(debug) << s;
-
-    //         LOG(debug) << __FUNCTION__ << " received = " << " [" << msg->GetData() << "] ";
-
-    //         size_t gsize = msg->GetSize();
-    //         std::cout <<"GetSize: " << gsize << std::endl;
-
-    // //         for(size_t i = 0; i < msg->GetSize(); i++) {
-    // //             printf("%02x", ptr[i]);
-    // //             if( ( (i+1)%8 ) == 0 )
-    // //                 printf("\n");
-    // //         }
-
-    // //     } else if(fSave) {
-    // //         LOG(debug) << __FUNCTION__ << " received = " << " [" << index << "] " << fNumMessages;
-    //         const auto ptr = reinterpret_cast<unsigned char*>(msg->GetData());
-    //         const auto ptr_next = ptr + msg->GetSize();
-    //         rawbuf.insert(rawbuf.end(),
-    //                       std::make_move_iterator( reinterpret_cast<char*>(ptr) ),
-    //                       std::make_move_iterator( reinterpret_cast<char*>(ptr_next) )
-    //                      );
-
-    // //     }// save or print
-    //     // ++fNumMessages;
-    // }//msg
-
-    // if( fstr.is_open() && fopened ) {
-    //     fstr.write(rawbuf.data(), length);
     // }
+
 
     return true;
 }
+
+// bool RoestiSink::Save2File(){
+//     return false;
+// }
 
 //_____________________________________________________________________________
 void RoestiSink::Init()
@@ -432,10 +441,10 @@ void RoestiSink::PreRun()
     //  std::string filename = "run" + rnumber + ".dat";
     //  fstr.open(filename.data(), std::ios::binary);
 
-    // char filename[256];
-    // sprintf(filename, "./dataout/run%06d.dat", stoi(rnumber));
-    // fstr.open(filename, std::ios::binary);
-    // fopened = true;
+    char filename[256];
+    sprintf(filename, "./dataout/run%06d.dat", stoi(rnumber));
+    fstr.open(filename, std::ios::binary);
+    fopened = true;
 
 }
 //_____________________________________________________________________________

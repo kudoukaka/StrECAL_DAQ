@@ -28,7 +28,7 @@ foreach(lvar IN ITEMS
   target_link_directories(${EXEC} PUBLIC
     ${Boost_LIBRARY_DIRS}; 
     ${FairMQ_LIBDIR};
-    #${ROOT_LIBRARIES};
+    ${ROOT_LIBRARIES};
   )
 
   target_link_libraries(${EXEC} PUBLIC 
@@ -37,7 +37,7 @@ foreach(lvar IN ITEMS
     FairMQ;
     FairMQStateMachine;
     FairLogger;
-    #${ROOT_LIBRARIES};
+    ${ROOT_LIBRARIES};
     #${HIREDIS_LIB};
     #${REDIS_PLUS_PLUS_LIB};
   )
