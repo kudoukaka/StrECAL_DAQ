@@ -19,8 +19,9 @@
 // #include "TBufferFile.h"
 #include "TFile.h"
 #include "TTree.h"
-#include "TLeaf.h" 
+#include "TLeaf.h"
 #include "TObject.h"
+#include "TAxis.h" 
 #include <TGraph.h>
 #include <TCanvas.h>
 
@@ -128,133 +129,41 @@ uint64_t RoestiSink::TotalLength(const FairMQParts& parts)
 bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
 {
 
-    // std::string output_file = argv[3];
-    // char filename[256];
-    // sprintf(filename, "./data/run%06d.dat", stoi(rnumber));
-    // std::ofstream outfile(filename, std::ios::binary);
-    // outfile.write(buffer, bytes_received);
-    // outfile.close();
+    auto stfHeader = reinterpret_cast<SubTimeFrame::Header*>(msgParts.At(0)->GetData());
+    auto stfId     = stfHeader->timeFrameId;
 
-    // for (const auto& msg : msgParts) {
-    //     const auto ptr = reinterpret_cast<char*>(msg->GetData());
-    //     std::string s(ptr, ptr+msg->GetSize());
-    //     LOG(debug) << __FUNCTION__ << " received = " << s << " [" << index << "] " << fNumMessages;
-    //     LOG(debug) << s;
-    //     fstr.write(ptr,msg->GetSize());
-    //     ++fNumMessages;
-    // }
+    char *receiveBuf = reinterpret_cast<char* >(msgParts.At(1)->GetData());
 
-
-    // ---raw buffer variant
-    // auto length = TotalLength(msgParts);
-    // std::cout << "TotalLength:" <<length << std::endl;
-    std::vector<char> rawbuf;
-    int full_size = msgParts.At(0)->GetSize() + msgParts.At(1)->GetSize();
-    rawbuf.reserve(full_size);
-
-    std::vector<unsigned char> rawData;
-    // std::cout << "Total len for file: "<< length << std::endl;
-    // FairMQParts inParts;
-
-    // TFile rfl("tree.root","recreate");
-    // rfl->WriteObject(hist, "MyHist");
-    
-    TFile* rtfile = new TFile("buffer_output.root", "RECREATE");
-    if (rtfile->IsZombie()) {
-        std::cerr << "Error creating ROOT file!" << std::endl;
-        return 1;
-    }
-    
-    TTree* tree = new TTree("chunkTree", "Tree with chunked buffer data");
-
-    // Create a TTree to hold the buffer data
-    // TTree* tree = new TTree("bufferTree", "Tree storing buffer data");
-    // float value;  // Temporary variable for tree branch
-    // tree->Branch("value", &value, "value/F");
-
-
-    //---baseline
-    // const int MAX_ROWS = 17;
-    // const int MAX_COLS = 1023;
-    // int baseline[MAX_ROWS][MAX_COLS] = {0}; 
-
-    // std::ifstream file("/home/frost/dev/comet/userworks-change/baseline_9E.txt");
-    // std::string line;
-
-    // while (std::getline(file, line)) {
-    //     std::stringstream ss(line);
-    //     std::string token;
-    //     int ch, samplenum, value;
-
-    //     std::getline(ss, token, ',');
-    //     ch = std::stoi(token);
-
-    //     std::getline(ss, token, ',');
-    //     samplenum = std::stoi(token);
-
-    //     std::getline(ss, token, ',');
-    //     value = std::stoi(token);
-
-    //     if (ch >= MAX_ROWS || samplenum >= MAX_COLS) {
-    //         std::cerr << "Index out of bounds: (" << ch << ", " << samplenum << ")\n";
-    //         continue;
-    //     }
-
-    //     baseline[ch][samplenum] = value;
-    // }
-    // for (int i = 0; i < MAX_ROWS; ++i) {
-    //     for (int j = 0; j < MAX_COLS; ++j) {
-    //         if (baseline[i][j] != 0) {
-    //             std::cout << "baseline[" << i << "][" << j << "] = " << baseline[i][j] << "\n";
-    //         }
-    //     }
-    // }
-
-    // int n=1;
-    // int m=3;
-    // int pedestal[n][m]={};
-    // int base_ch;
-    // int base_samplenum;
-    // int value;
-    // FILE *baseline_file;
-    // baseline_file = fopen("/home/frost/dev/comet/userworks-change/baseline_9E.txt" "r");
-    // if(baseline_file == NULL ){
-    //     std::cerr << "can not read base file" << std::endl;
-    //     return 1;
-    // }else{
-    //     while (fscanf(baseline_file, "%d,%d,%d", &base_ch, &base_samplenum, &value ) == 1) {
-    //         pedestal[base_ch][base_samplenum] = value; 
-    //     }
-    //     fclose(baseline_file);
-    // }
-    // LOG(warn) <<  pedestal[0][1]<< std::endl;
-
-    // --why recieve fires second time???
-    //  if (Receive(msgParts, fInputChannelName, 0, 1) > 0) {
-        // assert(msgParts.Size() >= 2);
-        
-        // LOG(warn) << "----------------msgSize----->" << msgParts.Size();
-        // auto packetSize = msgParts.At(1)->GetSize();
-
+    #ifdef DEBUG
         LOG(debug4) << " received message parts size [0] = " << msgParts.At(0)->GetSize();
-        // LOG(debug4) << "msg size: " << msgParts.Size() << std::endl;
         LOG(debug4) << "received message parts size [1] = " << msgParts.At(1)->GetSize();
 
-        
-        auto stfHeader = reinterpret_cast<SubTimeFrame::Header*>(msgParts.At(0)->GetData());
-        auto stfId     = stfHeader->timeFrameId;
-        LOG(warn) << "-----STF HEADER-----" << stfHeader;
+        LOG(debug4) << "-----STF HEADER-----" << stfHeader;
         LOG(debug4) << "DataPacket length:" << stfHeader->length;
         LOG(debug4) << "event number: "<< stfId;
         LOG(debug4) << "Board IP: "<< stfHeader->FEMId;
+    #endif
+
+    // struct Roesti::RoestiHeader *rhead = reinterpret_cast<struct Roesti::RoestiHeader *>(receiveBuf);
+    Roesti::RoestiHeader* rhead = reinterpret_cast<Roesti::RoestiHeader*>(receiveBuf);
+    unsigned int packets_full_length = rhead->length;
+
+    char* datapackets = receiveBuf + sizeof(Roesti::RoestiHeader);
+    unsigned int packet_read = 0;
+
+    //-define buffer boundries
+    // unsigned int packet_read = 0;
+    // unsigned int packets_full_length = rhead->length;
+    // char *datapackets = reinterpret_cast<char* >(receiveBuf+sizeof(struct Roesti::RoestiHeader));
+
+    // int ch_iter = 0;
+    // const int CHUNK_SIZE = 2048;
+    // const int NUM_BRANCHES = 17;
+    // char* chunks[NUM_BRANCHES];
 
 
-        char *recieveBuf = reinterpret_cast<char* >(msgParts.At(1)->GetData());
-
-        // hexdump(recieveBuf, msgParts.At(1)->GetSize());
-
-        struct Roesti::RoestiHeader *rhead = reinterpret_cast<struct Roesti::RoestiHeader *>(recieveBuf);
-        LOG(warn) << "-----Roesti Header-----";
+    #ifdef DEBUG
+        LOG(debug4) << "-----Roesti Header-----";
         LOG(debug4) << "Roesti Header magic--->" << rhead->magic;
         LOG(debug4) << "Roesti Header length--->" << rhead->length;
         LOG(debug4) << "Roesti Header event--->" << rhead->event_num;
@@ -262,58 +171,42 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
         LOG(debug4) << "Roesti Header seu--->" << rhead->seu_count;
         LOG(debug4) << "Roesti Header mbu--->" << rhead->mbu_count;
         LOG(debug4) << "Roesti Header seumb--->" << rhead->seu_inf_size;
+    #endif
 
-        // Create ROOT file from an existing buffer
-        // TBufferFile *bufFromBuffer = new TBufferFile(TBuffer::kWrite, full_size, recieveBuf);
+   
+    // --- Create unique ROOT file ---
+    std::ostringstream filename;
+    filename << "RoestiEvent_STF_" << stfId << "_index_" << index << ".root";
 
-        // struct Roesti::RoestiDataBody *rdpack = reinterpret_cast<Roesti::RoestiDataBody*>(recieveBuf+sizeof(Roesti::RoestiHeader));
-        // LOG(warn) << "-----Roesti Data-----";
-        // LOG(debug4) << "RoestiWord->" << rdpack->data_packet_word;
-        // LOG(debug4) << "RoestiCH#->" << rdpack->channel_num;
-        // LOG(debug4) << "RoestiStop#->" << rdpack->channel_num;
-        // LOG(debug4) << "RoestiDatalength->" << rdpack->data_length;
-        // LOG(debug4) << "RoestiADC->" << rdpack->data;
-        // LOG(debug4) << "RoestiFooter->" << rdpack->data_footer;
-        // LOG(debug4) << "Roestikeyword->" << rdpack->keyword<<std::endl;
-
-
-
-        // Create a TBufferFile (used to simulate writing with TFileBuffer-like logic)
-        // TBufferFile rtbuff(TBuffer::kWrite);
-
-        // // Write buffer size and data manually to the TBuffer
-        // int buffer_size = msgParts.At(1)->GetSize();
-        // rtbuff.WriteInt(buffer_size);
-        // rtbuff.WriteObject(msgParts.At(1)->GetData(), buffer_size);
-
-        // // Now write this buffer as a binary blob into the ROOT file
-        // rtfile->WriteObject(&rtbuff, "RawBuffer");
-
-        // rtfile->Close();
+    TFile* rtfile = new TFile(filename.str().c_str(), "RECREATE");
+    if (rtfile->IsZombie()) {
+        std::cerr << "Error creating ROOT file!" << std::endl;
+        return false;
+    }
+    
+    TTree* dataTree = new TTree("packetTree", "Tree with chunked buffer data");
+    dataTree->Branch("stfId", &stfId);
 
 
-        //-define buffer boundries
-        unsigned int packet_read = 0;
-        unsigned int packets_full_length = rhead->length;
-        char *datapackets = reinterpret_cast<char* >(recieveBuf+sizeof(struct Roesti::RoestiHeader));
 
-        //-vector for saving data
-        // std::vector<char> data_packs_content ;
-        // data_packs_content.clear();
-        // data_packs_content.reserve(packets_full_length);
-        
+    // Vectors to hold ADC data for each channel
+    const int NUM_CHANNELS = 18;
+    std::vector<std::vector<double>> adcData(NUM_CHANNELS);
+    std::vector<std::vector<double>> adcTime(NUM_CHANNELS); // time sample index
 
-        int ch_iter = 0;
-       
-        const int CHUNK_SIZE = 2048;
-        const int NUM_BRANCHES = 17;
-         char* chunks[NUM_BRANCHES];
-
+    #ifdef DEBUG
         std::cout<< "--------------------DATA--------------------" << std::endl;
-        while(packet_read < packets_full_length){
+    #endif
+
+
+    while(packet_read < packets_full_length){
+
+        /* 
+        //----------manual packet size definitions
+        struct Roesti::DataPacketHeader *rdpackhead = reinterpret_cast<Roesti::DataPacketHeader *>(datapackets);
+
+        #ifdef DEBUG
             std::cout << "data packet read/length: " << packet_read << "/" << packets_full_length << std::endl;
-            
-            struct Roesti::DataPacketHeader *rdpackhead = reinterpret_cast<Roesti::DataPacketHeader *>(datapackets);
             // LOG(debug4) << "DataPackHeader Word->" << rdpackhead->data_packet_word;
             // LOG(debug4) << "DataPackHeader CH#->" << static_cast<unsigned int>(rdpackhead->channel_num);
             // LOG(debug4) << "DataPackHeader Stop#->" << rdpackhead->stop_num;
@@ -324,162 +217,86 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
 		    std::cout << ", stop: " << std::dec << rdpackhead->stop_num;
 		    std::cout << ", Len: " << std::dec << rdpackhead->data_length;
 		    std::cout << std::endl;
+        #endif
 
-            struct Roesti::DataPacketData *rdpackdata = reinterpret_cast<Roesti::DataPacketData*>(datapackets
+        struct Roesti::DataPacketData *rdpackdata = reinterpret_cast<Roesti::DataPacketData*>(datapackets
                                                                                               +sizeof(struct Roesti::DataPacketHeader));
-            // LOG(debug4) << "DATA->" << rdpackdata->data;
-            // LOG(debug4) << "----DataBufferSize" << sizeof(rdpackdata->data);
+        // LOG(debug4) << "DATA->" << rdpackdata->data;
+        // LOG(debug4) << "----DataBufferSize" << sizeof(rdpackdata->data);
 
-            struct Roesti::DataPacketFooter *rdpackfooter = reinterpret_cast<Roesti::DataPacketFooter *>(datapackets
-                                                                                                    +sizeof(struct Roesti::DataPacketHeader)
-                                                                                                    +rdpackhead->data_length );
+        struct Roesti::DataPacketFooter *rdpackfooter = reinterpret_cast<Roesti::DataPacketFooter *>(datapackets
+                                                                                                    +sizeof(struct Roesti::DataPacketHeader)   
+        
+        #ifdef DEBUG                                                                                            +rdpackhead->data_length );
             // LOG(debug4) << "DataPackFooter Word->" << rdpackfooter->footer;
             std::cout << "DP footer: 0x" << std::hex << rdpackfooter->footer;
 		    std::cout << ", keyword: 0x" << static_cast<unsigned int>(rdpackfooter->keyword);
 		    std::cout << ", res: 0x" << static_cast<unsigned int>(rdpackfooter->reserved);
 		    std::cout << std::dec << std::endl;
-
-            // data_packs_content.insert(data_packs_content.begin()+ch_iter, datapackets, sizeof(struct Roesti::DataPacketHeader)+rdpackhead->data_length + sizeof(struct Roesti::DataPacketFooter));
+        #endif
+        // data_packs_content.insert(data_packs_content.begin()+ch_iter, datapackets, sizeof(struct Roesti::DataPacketHeader)+rdpackhead->data_length + sizeof(struct Roesti::DataPacketFooter));
             
-
-            packet_read += sizeof(struct Roesti::DataPacketHeader)+rdpackhead->data_length + sizeof(struct Roesti::DataPacketFooter);
+        packet_read += sizeof(struct Roesti::DataPacketHeader)+rdpackhead->data_length + sizeof(struct Roesti::DataPacketFooter);
             
-            // data_packs_content.insert(data_packs_content.end(), *datapackets, sizeof(packet_read));
+        // data_packs_content.insert(data_packs_content.end(), *datapackets, sizeof(packet_read));
 
-            // const auto ptr = datapackets;
-            // const auto ptr_next = ptr + packet_read;
-            // data_packs_content.insert(data_packs_content.end(),
-            //                           std::make_move_iterator(reinterpret_cast<char *>(ptr)),
-            //                           std::make_move_iterator(reinterpret_cast<char *>(ptr_next)) );
+        // const auto ptr = datapackets;
+        // const auto ptr_next = ptr + packet_read;
+        // data_packs_content.insert(data_packs_content.end(),
+        //                           std::make_move_iterator(reinterpret_cast<char *>(ptr)),
+        //                           std::make_move_iterator(reinterpret_cast<char *>(ptr_next)) );
 
-            datapackets += sizeof(struct Roesti::DataPacketHeader)+rdpackhead->data_length + sizeof(struct Roesti::DataPacketFooter);
-            
-            
-            TGraph* graph = new TGraph(CHUNK_SIZE);
-            chunks[ch_iter] = new char[CHUNK_SIZE];
-            std::string branchName = "chunk_" + std::to_string(ch_iter);
-            tree->Branch(branchName.c_str(), chunks[ch_iter], (branchName + "[" + std::to_string(ch_iter) + "]/B").c_str());
+        datapackets += sizeof(struct Roesti::DataPacketHeader)+rdpackhead->data_length + sizeof(struct Roesti::DataPacketFooter);
+        */
 
-            std::string graphName = "graph_" + std::to_string(ch_iter);
-            tree->Branch(graphName.c_str(), &graph);
+        //----------auto packet size definition
+        auto* rdpackhead = reinterpret_cast<Roesti::DataPacketHeader*>(datapackets);
 
-            // std::memcpy(chunks[i], &datapackets, packet_read);
-            // std::memcpy(chunks[ch_iter] , &datapackets, 2048);
+        uint8_t channel = rdpackhead->channel_num;
+        uint16_t dataLength = rdpackhead->data_length;
 
-            // rawbuf = new std::vector<unsigned char>(
-            //     datapackets+sizeof(struct Roesti::DataPacketHeader),
-            //     datapackets+sizeof(struct Roesti::DataPacketHeader)+CHUNK_SIZE
-            //     // rdpackdata,
-            //     // rdpackdata+CHUNK_SIZE
-            // );
-
-            // rawData.assign(rdpackdata->data, rdpackdata->data + CHUNK_SIZE);
-            rawData.assign(datapackets+sizeof(struct Roesti::DataPacketHeader), datapackets+sizeof(struct Roesti::DataPacketHeader) + CHUNK_SIZE);
-
-           
-            // graph->Set(0); // clear previous points
-           
-            for (int i = 0; i < CHUNK_SIZE; ++i) {
-                graph->SetPoint(i, i, static_cast<double>(rawData[i]));
-            }
-            
-            // graph->SetTitle("ADC Roesti");
-            // graph->Draw("AL");
-            // for(int ch = 0; ch < 16; ch++){
-            //     for(int sample = 0; sample < 1024; sample++){
-            //         int capacitor_number = (sample + int(rdpackhead->stop_num)) % 1024;
-            //         int data_calib_level1 = (int)(rdpackdata & 0x0fff);
-            //         int data_calib_level2 = data_calib_level1 - baseline[ch][capacitor_number];
-            //         float data_calib_level3 = (float)data_calib_level2 / 2048. * 1000.;
-            //         graph[ch]->SetPoint(sample, sample, data_calib_level3);
-            //     }
-            //     graph[ch]->Draw("");
-            // }
-
-            //Fill the tree
-            tree->Fill();
-            ch_iter++;
-
-            // delete graph;
-            // graph = nullptr;
-            // delete rawData;
-            // rawData = nullptr;
-
+        if (channel >= NUM_CHANNELS) {
+            std::cerr << "Invalid channel number: " << static_cast<int>(channel) << std::endl;
+            break;
         }
 
-        tree->Write();
-        rtfile->Close();
-        
-       
+        auto* data = reinterpret_cast<uint8_t*>(datapackets + sizeof(Roesti::DataPacketHeader));
 
-        //-cast to full packet struct, data size wrong
-        // struct Roesti::RoestiDataPacket *rfullpack = reinterpret_cast<Roesti::RoestiDataPacket* >(recieveBuf+sizeof(struct Roesti::RoestiHeader));
-        // LOG(debug4) << "DataPackHeader Word->" << rfullpack->data_packet_word;
-        // LOG(debug4) << "DataPackHeader CH#->" << static_cast<unsigned int>(rfullpack->channel_num);
-        // LOG(debug4) << "DataPackHeader Stop#->" << rfullpack->stop_num;
-        // LOG(debug4) << "DataPackFooter Word->" << rfullpack->data_footer;
+        for (int i = 0; i < dataLength; ++i) {
+            adcData[channel].push_back(static_cast<double>(data[i]));
+            adcTime[channel].push_back(adcTime[channel].size());  // simple time index
+        }
 
-        //----check input with file
-        // char *dbody = reinterpret_cast<char* >(recieveBuf);
-        // dbody += sizeof(recieveBuf) + sizeof(struct Roesti::RoestiHeader)+sizeof(struct Roesti::DataPacketHeader);
-        // std::ofstream outputFile("./dataout/input_body.bin", std::ios::binary);
-        // outputFile.write(dbody,rdpackhead->data_length);
-        // outputFile.close();
+        // Advance to next packet
+        packet_read += sizeof(Roesti::DataPacketHeader) + dataLength + sizeof(Roesti::DataPacketFooter);
+        datapackets += sizeof(Roesti::DataPacketHeader) + dataLength + sizeof(Roesti::DataPacketFooter);
 
-        
-        // vectorBuffer.reserve(TotalLength(msgParts.At(1)->GetData()));
-        // memcpy(pStartBuffer, &rdpack, msgParts.At(1)->GetSize());
+    }
+    // --- Create TGraphs and write to them ---
+    rtfile->cd();
+    for (int ch = 0; ch < NUM_CHANNELS; ++ch) {
+        std::ostringstream gname;
+        gname << "channel_" << ch;
 
-        // rawbuf.insert(rawbuf.end(), 
-        //                 reinterpret_cast<const char*>(rdpack->data), 
-        //                 reinterpret_cast<const char*>(rdpack->data)+sizeof(rdpack->data));
+        TGraph* graph = new TGraph(adcData[ch].size(),
+                                   adcTime[ch].data(),
+                                   adcData[ch].data());
 
-        // if (fTFBuffer.find(stfId) == fTFBuffer.end()) {
-        //     fTFBuffer[stfId].reserve(fNumSource);
-        // }
-        // fTFBuffer[stfId].emplace_back(STFBuffer {std::move(msgParts), std::chrono::steady_clock::now()});
+        graph->SetTitle(gname.str().c_str());
+        graph->GetXaxis()->SetTitle("Sample");
+        graph->GetYaxis()->SetTitle("ADC Value");
+        graph->Write(gname.str().c_str());
+    }
 
-        // if (!fTFBuffer.empty()) {
-        //     LOG(info) << fTFBuffer[stfId];
-        //     fTFBuffer.clear();
-        // }
+    // Write tree
+    dataTree->Fill();
+    dataTree->Write();
 
-        // ---raw buffer variant
-        // const auto ptr = rdpackdata->data;
-        // const auto ptr_next = ptr + msgParts.At(1)->GetSize();//sizeof(rdpack->data); //msgParts.Size();
-        // // // // LOG(debug4) << "--raw-->" << ptr << std::endl;
-        // LOG(debug4) << "part: "<< ptr;
-        // LOG(debug4) << "part length: "<< TotalLength(ptr);
-        // LOG(debug4) << "part next: "<< ptr_next;
-        // LOG(debug4) << "part next length: "<< TotalLength(ptr_next);
-        // rawbuf.insert(
-        //     rawbuf.end(),
-        //     std::make_move_iterator(reinterpret_cast<char *>(ptr)),
-        //     std::make_move_iterator(reinterpret_cast<char *>(ptr_next)));
-
-        // if( fstr.is_open() && fopened ) {
-        //     // fstr.write(rawbuf.data(), length);
-        //     fstr.write(reinterpret_cast<char* >(recieveBuf), msgParts.At(1)->GetSize());
-        // }
-
-        // ---memcp to buffer variant
-        // char* pStartBuffer ; //= reinterpret_cast<char *>(rdpackdata);
-        // memcpy(pStartBuffer, &rdpackdata, rhead->length);
-
-        // if( fstr.is_open() && fopened ) {
-        //     // fstr.write(reinterpret_cast<const char*>(rdpack->data), rdpack->data_length);
-        //     fstr.write(pStartBuffer, rdpackhead->data_length);
-        // }
-
-    // }
-
+    rtfile->Close();
+    delete rtfile;
 
     return true;
 }
-
-// bool RoestiSink::Save2File(){
-//     return false;
-// }
 
 //_____________________________________________________________________________
 void RoestiSink::Init()
