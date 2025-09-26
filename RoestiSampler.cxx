@@ -339,7 +339,7 @@ bool RoestiSampler::ConditionalRun()
 
 	//---Read header
 
-	unsigned char rec_buf[40*1000];ghgh
+	unsigned char rec_buf[40*1000];
 	struct Roesti::RoestiHeader *pheader = reinterpret_cast<struct Roesti::RoestiHeader *>(rec_buf);
 	int header_size = sizeof(struct Roesti::RoestiHeader);
 
