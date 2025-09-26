@@ -6,6 +6,8 @@
 #include <vector>
 #include <numeric>
 #include <iostream>
+#include <fstream>
+#include <sstream>
 #include <iomanip>
 #include <functional>
 #include <thread>
@@ -14,11 +16,13 @@
 #include <string>
 
 
-#include "TBufferFile.h"
+// #include "TBufferFile.h"
 #include "TFile.h"
 #include "TTree.h"
 #include "TLeaf.h" 
 #include "TObject.h"
+#include <TGraph.h>
+#include <TCanvas.h>
 
 #include <fairmq/runFairMQDevice.h>
 // #include <fairmq/runDevice.h>
@@ -147,6 +151,8 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
     std::vector<char> rawbuf;
     int full_size = msgParts.At(0)->GetSize() + msgParts.At(1)->GetSize();
     rawbuf.reserve(full_size);
+
+    std::vector<unsigned char> rawData;
     // std::cout << "Total len for file: "<< length << std::endl;
     // FairMQParts inParts;
 
@@ -166,6 +172,62 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
     // float value;  // Temporary variable for tree branch
     // tree->Branch("value", &value, "value/F");
 
+
+    //---baseline
+    // const int MAX_ROWS = 17;
+    // const int MAX_COLS = 1023;
+    // int baseline[MAX_ROWS][MAX_COLS] = {0}; 
+
+    // std::ifstream file("/home/frost/dev/comet/userworks-change/baseline_9E.txt");
+    // std::string line;
+
+    // while (std::getline(file, line)) {
+    //     std::stringstream ss(line);
+    //     std::string token;
+    //     int ch, samplenum, value;
+
+    //     std::getline(ss, token, ',');
+    //     ch = std::stoi(token);
+
+    //     std::getline(ss, token, ',');
+    //     samplenum = std::stoi(token);
+
+    //     std::getline(ss, token, ',');
+    //     value = std::stoi(token);
+
+    //     if (ch >= MAX_ROWS || samplenum >= MAX_COLS) {
+    //         std::cerr << "Index out of bounds: (" << ch << ", " << samplenum << ")\n";
+    //         continue;
+    //     }
+
+    //     baseline[ch][samplenum] = value;
+    // }
+    // for (int i = 0; i < MAX_ROWS; ++i) {
+    //     for (int j = 0; j < MAX_COLS; ++j) {
+    //         if (baseline[i][j] != 0) {
+    //             std::cout << "baseline[" << i << "][" << j << "] = " << baseline[i][j] << "\n";
+    //         }
+    //     }
+    // }
+
+    // int n=1;
+    // int m=3;
+    // int pedestal[n][m]={};
+    // int base_ch;
+    // int base_samplenum;
+    // int value;
+    // FILE *baseline_file;
+    // baseline_file = fopen("/home/frost/dev/comet/userworks-change/baseline_9E.txt" "r");
+    // if(baseline_file == NULL ){
+    //     std::cerr << "can not read base file" << std::endl;
+    //     return 1;
+    // }else{
+    //     while (fscanf(baseline_file, "%d,%d,%d", &base_ch, &base_samplenum, &value ) == 1) {
+    //         pedestal[base_ch][base_samplenum] = value; 
+    //     }
+    //     fclose(baseline_file);
+    // }
+    // LOG(warn) <<  pedestal[0][1]<< std::endl;
 
     // --why recieve fires second time???
     //  if (Receive(msgParts, fInputChannelName, 0, 1) > 0) {
@@ -239,12 +301,14 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
         // std::vector<char> data_packs_content ;
         // data_packs_content.clear();
         // data_packs_content.reserve(packets_full_length);
+        
+
         int ch_iter = 0;
        
         const int CHUNK_SIZE = 2048;
-        const int NUM_BRANCHES = 18;
-        char* chunks[NUM_BRANCHES];
-        chunks[ch_iter] = new char[CHUNK_SIZE];
+        const int NUM_BRANCHES = 17;
+         char* chunks[NUM_BRANCHES];
+
         std::cout<< "--------------------DATA--------------------" << std::endl;
         while(packet_read < packets_full_length){
             std::cout << "data packet read/length: " << packet_read << "/" << packets_full_length << std::endl;
@@ -291,21 +355,62 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
             datapackets += sizeof(struct Roesti::DataPacketHeader)+rdpackhead->data_length + sizeof(struct Roesti::DataPacketFooter);
             
             
+            TGraph* graph = new TGraph(CHUNK_SIZE);
+            chunks[ch_iter] = new char[CHUNK_SIZE];
+            std::string branchName = "chunk_" + std::to_string(ch_iter);
+            tree->Branch(branchName.c_str(), chunks[ch_iter], (branchName + "[" + std::to_string(ch_iter) + "]/B").c_str());
 
-        
-            std::string branchName = "chunk" + std::to_string(ch_iter);
-            tree->Branch(branchName.c_str(), chunks[ch_iter], (branchName + "[" + std::to_string(CHUNK_SIZE) + "]/B").c_str());
+            std::string graphName = "graph_" + std::to_string(ch_iter);
+            tree->Branch(graphName.c_str(), &graph);
 
             // std::memcpy(chunks[i], &datapackets, packet_read);
-            std::memcpy(chunks[ch_iter] , &datapackets, 2048);
+            // std::memcpy(chunks[ch_iter] , &datapackets, 2048);
+
+            // rawbuf = new std::vector<unsigned char>(
+            //     datapackets+sizeof(struct Roesti::DataPacketHeader),
+            //     datapackets+sizeof(struct Roesti::DataPacketHeader)+CHUNK_SIZE
+            //     // rdpackdata,
+            //     // rdpackdata+CHUNK_SIZE
+            // );
+
+            // rawData.assign(rdpackdata->data, rdpackdata->data + CHUNK_SIZE);
+            rawData.assign(datapackets+sizeof(struct Roesti::DataPacketHeader), datapackets+sizeof(struct Roesti::DataPacketHeader) + CHUNK_SIZE);
+
+           
+            // graph->Set(0); // clear previous points
+           
+            for (int i = 0; i < CHUNK_SIZE; ++i) {
+                graph->SetPoint(i, i, static_cast<double>(rawData[i]));
+            }
+            
+            // graph->SetTitle("ADC Roesti");
+            // graph->Draw("AL");
+            // for(int ch = 0; ch < 16; ch++){
+            //     for(int sample = 0; sample < 1024; sample++){
+            //         int capacitor_number = (sample + int(rdpackhead->stop_num)) % 1024;
+            //         int data_calib_level1 = (int)(rdpackdata & 0x0fff);
+            //         int data_calib_level2 = data_calib_level1 - baseline[ch][capacitor_number];
+            //         float data_calib_level3 = (float)data_calib_level2 / 2048. * 1000.;
+            //         graph[ch]->SetPoint(sample, sample, data_calib_level3);
+            //     }
+            //     graph[ch]->Draw("");
+            // }
 
             //Fill the tree
             tree->Fill();
             ch_iter++;
+
+            // delete graph;
+            // graph = nullptr;
+            // delete rawData;
+            // rawData = nullptr;
+
         }
 
         tree->Write();
         rtfile->Close();
+        
+       
 
         //-cast to full packet struct, data size wrong
         // struct Roesti::RoestiDataPacket *rfullpack = reinterpret_cast<Roesti::RoestiDataPacket* >(recieveBuf+sizeof(struct Roesti::RoestiHeader));
@@ -352,10 +457,10 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
         //     std::make_move_iterator(reinterpret_cast<char *>(ptr)),
         //     std::make_move_iterator(reinterpret_cast<char *>(ptr_next)));
 
-        if( fstr.is_open() && fopened ) {
-            // fstr.write(rawbuf.data(), length);
-            fstr.write(reinterpret_cast<char* >(recieveBuf), msgParts.At(1)->GetSize());
-        }
+        // if( fstr.is_open() && fopened ) {
+        //     // fstr.write(rawbuf.data(), length);
+        //     fstr.write(reinterpret_cast<char* >(recieveBuf), msgParts.At(1)->GetSize());
+        // }
 
         // ---memcp to buffer variant
         // char* pStartBuffer ; //= reinterpret_cast<char *>(rdpackdata);

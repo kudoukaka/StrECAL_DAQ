@@ -322,7 +322,6 @@ int CheckRoestiDataPacket(unsigned char *data, int len)
 bool RoestiSampler::ConditionalRun()
 {
 	
-
 	fair::mq::Parts outParts;
 	// struct Roesti::RoestiHeader roesti_header;
 
@@ -340,7 +339,7 @@ bool RoestiSampler::ConditionalRun()
 
 	//---Read header
 
-	unsigned char rec_buf[40*1000];
+	unsigned char rec_buf[40*1000];ghgh
 	struct Roesti::RoestiHeader *pheader = reinterpret_cast<struct Roesti::RoestiHeader *>(rec_buf);
 	int header_size = sizeof(struct Roesti::RoestiHeader);
 
@@ -348,6 +347,11 @@ bool RoestiSampler::ConditionalRun()
 
 	// LOG(info) << "Header data recieved: " << header_read;
 	// LOG(warn) << "Size of defined nhsize : " << sizeof(nhsize);
+
+	// char ev[4];
+	// memcpy(&ev[0], &pheader[12], 4);
+    // std::cout << "-------------ev manual--------->"<< std::hex << ev << std::endl;
+
 	
 	if (header_read < header_size) {
 		LOG(warn) << "Irregal header data size : " << header_read << "/" << header_size;
@@ -372,7 +376,7 @@ bool RoestiSampler::ConditionalRun()
 	std::cout<< "--------------------HEADER--------------------" << std::endl;
 	std::cout << "body length size: " << sizeof(pheader->length)
 		<< " / body length value: " << pheader->length << std::endl;
-	std::cout << "event number: " << pheader->event_num << std::endl;
+	// std::cout << "event number: " << pheader->event_num << std::endl;
 
 	std::cout << "MAGIC: 0x" << std::hex << pheader->magic;
 	std::cout << ", Type: 0x" << std::hex << pheader->type;
@@ -382,7 +386,7 @@ bool RoestiSampler::ConditionalRun()
 	std::cout << " SEU: " << std::dec << pheader->seu_count;
 	std::cout << " SEU size: " << std::dec << pheader->seu_inf_size;
 	std::cout << " MBU: " << std::dec << pheader->mbu_count;
-	std::cout << ", Event Number: " << std::dec << pheader->event_num << std::endl;
+	std::cout << ", Event Number: " << (pheader->event_num & 0xff) << std::endl;
 
 
 	//---Read data packet
@@ -495,7 +499,6 @@ bool RoestiSampler::ConditionalRun()
 	memcpy(msgbuf, pheader, sizeof(struct Roesti::RoestiHeader));
 	msgbuf+=sizeof(struct Roesti::RoestiHeader);
 	memcpy(msgbuf, TCP_data, dp_len);
-
 
 	
 	// char *body_packet = reinterpret_cast<char *>(msgRoesti.GetData());
