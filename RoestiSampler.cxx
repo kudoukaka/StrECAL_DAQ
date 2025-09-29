@@ -287,21 +287,24 @@ int CheckRoestiDataPacket(unsigned char *data, int len)
 		struct Roesti::DataPacketHeader *ppheader = reinterpret_cast<Roesti::DataPacketHeader *>(buf);
 		if (ppheader->data_packet_word != Roesti::DATA_PACKET_MAGIC) break;
 
-		std::cout << "DP MAGIC: 0x" << std::hex << ppheader->data_packet_word;
-		std::cout << ", res: 0x" << std::hex << static_cast<unsigned int>(ppheader->reserved_header);
-		std::cout << ", ch: " << std::dec << static_cast<unsigned int>(ppheader->channel_num);
-		std::cout << ", stop: " << std::dec << ppheader->stop_num;
-		std::cout << ", Len: " << std::dec << ppheader->data_length;
-		std::cout << std::endl;
+		#ifdef DEBUG
+			std::cout << "DP MAGIC: 0x" << std::hex << ppheader->data_packet_word;
+			std::cout << ", res: 0x" << std::hex << static_cast<unsigned int>(ppheader->reserved_header);
+			std::cout << ", ch: " << std::dec << static_cast<unsigned int>(ppheader->channel_num);
+			std::cout << ", stop: " << std::dec << ppheader->stop_num;
+			std::cout << ", Len: " << std::dec << ppheader->data_length;
+			std::cout << std::endl;
+		#endif
 
 		struct Roesti::DataPacketFooter *ppfooter
 			= reinterpret_cast<Roesti::DataPacketFooter *>
 			(buf + ppheader->data_length + sizeof(Roesti::DataPacketHeader));
-
-		std::cout << "DP footer: 0x" << std::hex << ppfooter->footer;
-		std::cout << ", keyword: 0x" << static_cast<unsigned int>(ppfooter->keyword);
-		std::cout << ", res: 0x" << static_cast<unsigned int>(ppfooter->reserved);
-		std::cout << std::dec << std::endl;
+		#ifdef DEBUG
+			std::cout << "DP footer: 0x" << std::hex << ppfooter->footer;
+			std::cout << ", keyword: 0x" << static_cast<unsigned int>(ppfooter->keyword);
+			std::cout << ", res: 0x" << static_cast<unsigned int>(ppfooter->reserved);
+			std::cout << std::dec << std::endl;
+		#endif
 
 		buf += sizeof(Roesti::DataPacketHeader) + ppheader->data_length + sizeof(Roesti::DataPacketFooter);
 		if ((buf - data) > len) break;
@@ -372,22 +375,22 @@ bool RoestiSampler::ConditionalRun()
 		}
 	}
 
+	#ifdef DEBUG
+		std::cout<< "--------------------HEADER--------------------" << std::endl;
+		std::cout << "body length size: " << sizeof(pheader->length)
+			<< " / body length value: " << pheader->length << std::endl;
+		// std::cout << "event number: " << pheader->event_num << std::endl;
 
-	std::cout<< "--------------------HEADER--------------------" << std::endl;
-	std::cout << "body length size: " << sizeof(pheader->length)
-		<< " / body length value: " << pheader->length << std::endl;
-	// std::cout << "event number: " << pheader->event_num << std::endl;
-
-	std::cout << "MAGIC: 0x" << std::hex << pheader->magic;
-	std::cout << ", Type: 0x" << std::hex << pheader->type;
-	std::cout << ", IP: " << std::dec << (pheader->ipaddr & 0xff00 >> 16)
-		<< "." << (pheader->ipaddr & 0xff) << std::endl;
-	std::cout << " Len: " << std::dec << pheader->length;
-	std::cout << " SEU: " << std::dec << pheader->seu_count;
-	std::cout << " SEU size: " << std::dec << pheader->seu_inf_size;
-	std::cout << " MBU: " << std::dec << pheader->mbu_count;
-	std::cout << ", Event Number: " << (pheader->event_num & 0xff) << std::endl;
-
+		std::cout << "MAGIC: 0x" << std::hex << pheader->magic;
+		std::cout << ", Type: 0x" << std::hex << pheader->type;
+		std::cout << ", IP: " << std::dec << (pheader->ipaddr & 0xff00 >> 16)
+			<< "." << (pheader->ipaddr & 0xff) << std::endl;
+		std::cout << " Len: " << std::dec << pheader->length;
+		std::cout << " SEU: " << std::dec << pheader->seu_count;
+		std::cout << " SEU size: " << std::dec << pheader->seu_inf_size;
+		std::cout << " MBU: " << std::dec << pheader->mbu_count;
+		std::cout << ", Event Number: " << (pheader->event_num & 0xff) << std::endl;
+	#endif
 
 	//---Read data packet
 	unsigned char *TCP_data = rec_buf + sizeof(struct Roesti::RoestiHeader);
@@ -408,8 +411,11 @@ bool RoestiSampler::ConditionalRun()
 
 	// for (int i = 0 ; i < 10 ; i++) {
 		dp_read += fSock.Receive(reinterpret_cast<char *>(TCP_data), dp_len - dp_read, nflag);
-		std::cout<< "--------------------DATA--------------------" << std::endl;
-		std::cout << "data packet read/length: " << dp_read << "/" << dp_len << std::endl;
+		
+		#ifdef DEBUG
+			std::cout<< "--------------------DATA--------------------" << std::endl;
+			std::cout << "data packet read/length: " << dp_read << "/" << dp_len << std::endl;
+		#endif
 		
 		// if (dp_read >= dp_len) {
 		// 	LOG(warn) << "Length check: " << dp_read << "/" << dp_len;
@@ -453,11 +459,13 @@ bool RoestiSampler::ConditionalRun()
 	struct Roesti::RoestiFooter *pfooter = reinterpret_cast<Roesti::RoestiFooter *>(recvbuff);
 	int footer_read = fSock.Receive(reinterpret_cast<char *>(&recvbuff), footer_size, nflag);
 
-	std::cout<< "--------------------FOOTER--------------------" << std::endl;
-	std::cout << "Footer: size:" << std::dec << footer_read
-		<< ", key: 0x" << std::hex << pfooter->footer
-		<< ", crc: 0x" << std::hex << pfooter->crc32 << std::endl;
-	std::cout << std::dec;
+	#ifdef DEBUG
+		std::cout<< "--------------------FOOTER--------------------" << std::endl;
+		std::cout << "Footer: size:" << std::dec << footer_read
+			<< ", key: 0x" << std::hex << pfooter->footer
+			<< ", crc: 0x" << std::hex << pfooter->crc32 << std::endl;
+		std::cout << std::dec;
+	#endif
 
     //This needs to become full packet send
 	// outParts.AddPart(NewMessage(sizeof(struct Roesti::RoestiHeader)));
@@ -519,7 +527,9 @@ bool RoestiSampler::ConditionalRun()
 
 	// Send all outParts
 	Send(outParts, fOutputChannelName);
-	LOG(warn) << "PACKET sent";
+	#ifdef DEBUG
+		LOG(warn) << "PACKET sent";
+	#endif
 
 	return true;
 }
