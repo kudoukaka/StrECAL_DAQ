@@ -126,6 +126,59 @@ uint64_t RoestiSink::TotalLength(const FairMQParts& parts)
 }
 
 //_____________________________________________________________________________
+// ---------- Pedestal readout 
+const int NUM_CHANNELS = 18;
+const int NUM_CAPACITORS = 1024;
+
+int pedestal[NUM_CHANNELS][NUM_CAPACITORS] = {{0}};
+
+bool LoadPedestalForBoard(const std::string& filename)
+{
+
+    std::ifstream infile(filename);
+    if (!infile.is_open()) {
+        std::cerr << "Failed to open pedestal CSV file: " << filename << std::endl;
+        return false;
+    }
+
+    std::string line;
+    int line_num = 0;
+
+    while (std::getline(infile, line)) {
+        ++line_num;
+        if (line.empty()) continue;
+
+        std::stringstream ss(line);
+        std::string token;
+
+        int channel = -1;
+        int capacitor = -1;
+        int value = -1;
+
+        std::getline(ss, token, ',');
+        channel = std::stoi(token);
+
+        std::getline(ss, token, ',');
+        capacitor = std::stoi(token);
+
+        std::getline(ss, token, ',');
+        value = std::stoi(token);
+
+        if (channel < 0 || channel >= NUM_CHANNELS ||
+            capacitor < 0 || capacitor >= NUM_CAPACITORS) {
+            std::cerr << "Invalid entry at line " << line_num << ": " << line << std::endl;
+            continue;
+        }
+
+        pedestal[channel][capacitor] = value;
+    }
+
+    infile.close();
+    std::cout << "Pedestal values loaded from: " << filename << std::endl;
+    return true;
+}
+
+//_____________________________________________________________________________
 bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
 {
 
@@ -150,6 +203,7 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
 
     char* datapackets = receiveBuf + sizeof(Roesti::RoestiHeader);
     unsigned int packet_read = 0;
+    int packet_index = 0;
 
     //-define buffer boundries
     // unsigned int packet_read = 0;
@@ -176,28 +230,40 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
    
     // --- Create unique ROOT file ---
     std::ostringstream filename;
-    filename << "RoestiEvent_STF_" << stfId << "_index_" << index << ".root";
-
+    filename << "CalibratedWaveforms_STF_N" << stfId << ".root";
     TFile* rtfile = new TFile(filename.str().c_str(), "RECREATE");
     if (rtfile->IsZombie()) {
-        std::cerr << "Error creating ROOT file!" << std::endl;
+        std::cerr << "Error creating ROOT file: "<< filename.str() << std::endl;
         return false;
     }
     
-    TTree* dataTree = new TTree("packetTree", "Tree with chunked buffer data");
-    dataTree->Branch("stfId", &stfId);
+    const int MAX_SAMPLES = 1024;
+
+    TTree* dataTree = new TTree("waveformTree", "ADC Calibrated Waveforms");
+    // dataTree->Branch("stfId", &stfId);
+    TGraph* channelGraphs[NUM_CHANNELS] = {nullptr};
+
+    // Create TGraph branches
+    for (int ch = 0; ch < NUM_CHANNELS; ++ch) {
+        std::string branchName = "ch" + std::to_string(ch);
+        dataTree->Branch(branchName.c_str(), &channelGraphs[ch]);
+    }
+
+    // Optional: add event or STF ID as metadata
+    uint32_t event_id = rhead->event_num;
+    dataTree->Branch("event_id", &event_id, "event_id/i");
 
 
+    bool channelReceived[NUM_CHANNELS] = {false};
+    int channels_received_count = 0;
 
     // Vectors to hold ADC data for each channel
-    const int NUM_CHANNELS = 18;
-    std::vector<std::vector<double>> adcData(NUM_CHANNELS);
-    std::vector<std::vector<double>> adcTime(NUM_CHANNELS); // time sample index
+    // std::vector<std::vector<double>> adcData(NUM_CHANNELS);
+    // std::vector<std::vector<double>> adcTime(NUM_CHANNELS); // time sample index
 
     #ifdef DEBUG
         std::cout<< "--------------------DATA--------------------" << std::endl;
     #endif
-
 
     while(packet_read < packets_full_length){
 
@@ -254,46 +320,139 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
 
         uint8_t channel = rdpackhead->channel_num;
         uint16_t dataLength = rdpackhead->data_length;
+        uint16_t stop_num = rdpackhead->stop_num;
 
         if (channel >= NUM_CHANNELS) {
             std::cerr << "Invalid channel number: " << static_cast<int>(channel) << std::endl;
             break;
         }
 
+        size_t num_samples = dataLength / 2;
+        if (num_samples > MAX_SAMPLES) num_samples = MAX_SAMPLES;
+
+        std::vector<double> adc_data(num_samples);
+        std::vector<double> sample_idx(num_samples);
+
+        //--packet data
         auto* data = reinterpret_cast<uint8_t*>(datapackets + sizeof(Roesti::DataPacketHeader));
 
-        for (int i = 0; i < dataLength; ++i) {
-            adcData[channel].push_back(static_cast<double>(data[i]));
-            adcTime[channel].push_back(adcTime[channel].size());  // simple time index
+        
+        //Clean up old graph if any
+        if (channelGraphs[channel]) {
+            delete channelGraphs[channel];
+            channelGraphs[channel] = nullptr;
         }
 
-        // Advance to next packet
+         // Create new TGraph with calibrated data
+        channelGraphs[channel] = new TGraph(num_samples);
+
+        for (size_t i = 0; i < num_samples; ++i) {
+            uint16_t raw_adc = *(reinterpret_cast<uint16_t*>(data + i * 2)) & 0x0FFF;
+            int capacitor_number = (i + stop_num) % 1024;
+
+            int corrected = raw_adc;
+
+            // Apply pedestal correction only for ADC channels (0–15)
+            if (channel < 16) {
+                corrected -= pedestal[channel][capacitor_number];
+            }
+
+            //1
+            // float mv = (float)corrected / 2048.0f * 1000.0f;
+            // adc_data[i] = mv;
+            // sample_idx[i] = i;
+
+            double mv = static_cast<double>(corrected) / 2048.0 * 1000.0;
+            channelGraphs[channel]->SetPoint(i, i, mv);
+        }
+
+        channelGraphs[channel]->SetTitle(Form("Channel %d", channel));
+       
+        //1
+        // if (channelGraphs[channel]) {
+        //     delete channelGraphs[channel];
+        //     channelGraphs[channel] = nullptr;
+        // }
+        // Mark channel received if not already
+
+        //--count received channels
+        if (!channelReceived[channel]) {
+            channelReceived[channel] = true;
+            channels_received_count++;
+        }
+
+        //1
+        // channelGraphs[channel] = new TGraph(num_samples, sample_idx.data(), adc_data.data());
+        // channelGraphs[channel]->SetTitle(Form("Channel %d", channel));
+
+
+
+        //--Advance to next packet
         packet_read += sizeof(Roesti::DataPacketHeader) + dataLength + sizeof(Roesti::DataPacketFooter);
         datapackets += sizeof(Roesti::DataPacketHeader) + dataLength + sizeof(Roesti::DataPacketFooter);
+
+
+        
+
+        // Check if all channels have arrived
+        if (channels_received_count == NUM_CHANNELS) {
+            dataTree->Fill();
+
+            // Optional: Plot all channels together
+            // TCanvas* c1 = new TCanvas("c1", "Calibrated ADC Waveforms", 1200, 800);
+            // c1->Divide(3, 6); // 18 pads for 18 channels
+
+            // for (int ch = 0; ch < NUM_CHANNELS; ++ch) {
+            //     c1->cd(ch + 1);
+            //     channelGraphs[ch]->SetLineColor(kBlue);
+            //     channelGraphs[ch]->SetMarkerStyle(20);
+            //     channelGraphs[ch]->Draw("AL"); // Axis + Line
+            // }
+
+            // c1->Update();
+            // c1->SaveAs(Form("Waveforms_Event_%u.png", event_id));
+            // delete c1;
+
+            // Cleanup graphs for next event
+            for (int ch = 0; ch < NUM_CHANNELS; ++ch) {
+                delete channelGraphs[ch];
+                channelGraphs[ch] = nullptr;
+                channelReceived[ch] = false;
+            }
+            channels_received_count = 0;
+        }
 
     }
     // --- Create TGraphs and write to them ---
     rtfile->cd();
-    for (int ch = 0; ch < NUM_CHANNELS; ++ch) {
-        std::ostringstream gname;
-        gname << "channel_" << ch;
+    // 1
+    // for (int ch = 0; ch < NUM_CHANNELS; ++ch) {
+    //     std::ostringstream gname;
+    //     gname << "channel_" << ch;
 
-        TGraph* graph = new TGraph(adcData[ch].size(),
-                                   adcTime[ch].data(),
-                                   adcData[ch].data());
+    //     TGraph* graph = new TGraph(adcData[ch].size(),
+    //                                adcTime[ch].data(),
+    //                                adcData[ch].data());
 
-        graph->SetTitle(gname.str().c_str());
-        graph->GetXaxis()->SetTitle("Sample");
-        graph->GetYaxis()->SetTitle("ADC Value");
-        graph->Write(gname.str().c_str());
-    }
+    //     graph->SetTitle(gname.str().c_str());
+    //     graph->GetXaxis()->SetTitle("Sample");
+    //     graph->GetYaxis()->SetTitle("ADC Value");
+    //     graph->Write(gname.str().c_str());
+    // }
 
-    // Write tree
-    dataTree->Fill();
+    // // Write tree
+    // dataTree->Fill();
     dataTree->Write();
-
     rtfile->Close();
     delete rtfile;
+
+    // Safety cleanup (if last set incomplete)
+    for (int i = 0; i < NUM_CHANNELS; ++i) {
+        if (channelGraphs[i]) {
+            delete channelGraphs[i];
+            channelGraphs[i] = nullptr;
+        }
+    }
 
     return true;
 }
@@ -351,6 +510,8 @@ void RoestiSink::InitTask()
         LOG(warn) << " set data handler";
         OnData(fInputChannelName, &RoestiSink::HandleData);
     }
+
+    LoadPedestalForBoard("/home/frost/dev/comet/userworks-change/roesti/baseline_9E.txt");
 
 }
 
