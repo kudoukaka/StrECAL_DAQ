@@ -5,6 +5,7 @@
 
 #include <iostream>
 #include <iterator>
+#include <ostream>
 #include <string>
 #include <chrono>
 #include <cstdint>
@@ -244,7 +245,7 @@ void RoestiSampler::InitTask()
 	if(rbcp.Write( buffwrap(0x00), ADC_TEST_CH815      , 1) > 0){ LOG(info) << "-----SET: ADC_TEST_CH815"; }
 	if(rbcp.Write( buffwrap(0x08), THR_UPP             , 1) > 0){ LOG(info) << "-----SET: THR_UPP"; }
 	if(rbcp.Write( buffwrap(0x00), THR_LOW             , 1) > 0){ LOG(info) << "-----SET: THR_LOW"; }
-	if(rbcp.Write( buffwrap(0x02), TRIG                , 1) > 0){ LOG(info) << "-----SET: TRIG_TYPE"; } // 0x00-off, 0x02-base, 0x04-self, 0x08-normal
+	if(rbcp.Write( buffwrap(0x08), TRIG                , 1) > 0){ LOG(info) << "-----SET: TRIG_TYPE"; } // 0x00-off, 0x02-base, 0x04-self, 0x08-normal
 	// if(rbcp.Write( buffwrap(0x00), ADC_OUT_PHASE_CH07  , 1) > 0){ LOG(info) << "-----SET: ADC_OUT_PHASE_CH07"; }
 	   // if(rbcp.Write( buffwrap(0x00), ADC_OUT_PHASE_CH815 , 1) > 0){ LOG(info) << "-----SET: ADC_OUT_PHASE_CH815"; }
 	// if(rbcp.Write( buffwrap(0x3c), ASD_CHECK_START_TIME, 1) > 0){ LOG(info) << "-----SET: ASD_CHECK_START_TIME"; } // ?
@@ -252,7 +253,7 @@ void RoestiSampler::InitTask()
 	if(rbcp.Write( buffwrap(60), ASD_CHECK_START_TIME  , 1) > 0){ LOG(info) << "-----SET: ASD_CHECK_START_TIME"; } // ?
 	if(rbcp.Write( buffwrap(70), ASD_WAIT_WIDTH        , 1) > 0){ LOG(info) << "-----SET: ASD_WAIT_WIDTH"; } // ?
 	if(rbcp.Write( buffwrap(0x00), ZSUP                , 1) > 0){ LOG(info) << "-----SET: ZSUP"; } // 0x01-on, 0x00-off
-	if(rbcp.Write( buffwrap(0x00), DSEND               , 1) > 0){ LOG(info) << "-----SET: DSEND"; } // 0x01-on, 0x00-off
+	if(rbcp.Write( buffwrap(0x01), DSEND               , 1) > 0){ LOG(info) << "-----SET: DSEND"; } // 0x01-on, 0x00-off
 	if(rbcp.Write( buffwrap(0x01), DAC_SYNC            , 1) > 0){ LOG(info) << "-----SET: DAC_SYNC"; }
 	if(rbcp.Write( buffwrap(0xf0), RESET_DRS           , 1) > 0){ LOG(info) << "-----SET: RESET_DRS"; }
 	if(rbcp.Write( buffwrap(0xf0), RESET_INTR          , 1) > 0){ LOG(info) << "-----SET: RESET_INTR"; }
@@ -283,6 +284,7 @@ int CheckRoestiDataPacket(unsigned char *data, int len)
 {
 
 	unsigned char *buf = data;
+	
 	while(true) {
 		struct Roesti::DataPacketHeader *ppheader = reinterpret_cast<Roesti::DataPacketHeader *>(buf);
 		if (ppheader->data_packet_word != Roesti::DATA_PACKET_MAGIC) break;
@@ -310,12 +312,13 @@ int CheckRoestiDataPacket(unsigned char *data, int len)
 		if ((buf - data) > len) break;
 	}
 
-	int left = buf - data - len;
-	if (left > 0) {
-		std::cout << "Left data: " << left << " (" << (buf - data) << "/" << len << ")";
-		std::for_each(buf, data + len, HexDump(16));
-	}
-
+	#ifdef DEBUG
+		int left = buf - data - len;
+		if (left > 0) {
+			std::cout << "Left data: " << left << " (" << (buf - data) << "/" << len << ")";
+			std::for_each(buf, data + len, HexDump(16));
+		}
+	#endif
 
 	return 0;
 }

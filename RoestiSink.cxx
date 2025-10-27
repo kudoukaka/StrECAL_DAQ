@@ -202,18 +202,6 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
     int packet_index = 0;
 
     uint32_t event_id = rhead->event_num;
-    // const int MAX_SAMPLES = 1024;
-
-    //-define buffer boundries
-    // unsigned int packet_read = 0;
-    // unsigned int packets_full_length = rhead->length;
-    // char *datapackets = reinterpret_cast<char* >(receiveBuf+sizeof(struct Roesti::RoestiHeader));
-
-    // int ch_iter = 0;
-    // const int CHUNK_SIZE = 2048;
-    // const int NUM_BRANCHES = 17;
-    // char* chunks[NUM_BRANCHES];
-
 
     #ifdef DEBUG
         LOG(debug4) << "-----Roesti Header-----";
@@ -229,23 +217,13 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
     
     // Create unique ROOT file
     std::ostringstream filename;
-    filename << "CalibratedWaveforms_STF_safe" << stfId << ".root";
+    filename << "CalibratedWaveforms_STF_trigger" << stfId << ".root";
     TFile* rtfile = new TFile(filename.str().c_str(), "RECREATE");
     if (rtfile->IsZombie()) {
         std::cerr << "Error creating ROOT file: "<< filename.str() << std::endl;
         return false;
     }
     
-    // Single plot
-    // TTree* dataTree = new TTree("waveformTree", "ADC Calibrated Waveforms");
-    // // dataTree->Branch("stfId", &stfId);
-    // TGraph* channelGraphs[NUM_CHANNELS] = {nullptr};
-
-    // // Create TGraph branches
-    // for (int ch = 0; ch < NUM_CHANNELS; ++ch) {
-    //     std::string branchName = "ch" + std::to_string(ch);
-    //     dataTree->Branch(branchName.c_str(), &channelGraphs[ch]);
-    // }
 
     // Raw and callibated graphs per channel
     TGraph* calibratedGraphs[NUM_CHANNELS] = {nullptr};
@@ -277,8 +255,8 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
     int channels_received_count = 0;
 
     // Vectors to hold ADC data for each channel
-    // std::vector<std::vector<double>> adcData(NUM_CHANNELS);
-    // std::vector<std::vector<double>> adcTime(NUM_CHANNELS); // time sample index
+    std::vector<std::vector<double>> adcData(NUM_CHANNELS);
+    std::vector<std::vector<double>> adcTime(NUM_CHANNELS); // time sample index
 
     #ifdef DEBUG
         std::cout<< "--------------------DATA--------------------" << std::endl;
@@ -382,7 +360,7 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
             // Safe read of 16-bit sample to avoid alignment/endianness issues
             uint16_t raw_word = 0;
             memcpy(&raw_word, rdpackdata + sample * 2, sizeof(raw_word));
-            // If needed: raw_word = ntohs(raw_word);
+
             uint16_t raw_adc = raw_word & 0x0FFF;
 
             // std::cout << "raw adc: " << static_cast<int>(raw_adc) << std::endl;
@@ -459,20 +437,6 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
             #ifdef DEBUG
                 std::cout << "data packet recieved, size/channels:" << packet_size <<"/"<<channels_received_count << std::endl;
             #endif
-            // Optional: Plot all channels together
-            // TCanvas* c1 = new TCanvas("c1", "Calibrated ADC Waveforms", 1200, 800);
-            // c1->Divide(3, 6); // 18 pads for 18 channels
-
-            // for (int ch = 0; ch < NUM_CHANNELS; ++ch) {
-            //     c1->cd(ch + 1);
-            //     channelGraphs[ch]->SetLineColor(kBlue);
-            //     channelGraphs[ch]->SetMarkerStyle(20);
-            //     channelGraphs[ch]->Draw("AL"); // Axis + Line
-            // }
-
-            // c1->Update();
-            // c1->SaveAs(Form("Waveforms_Event_%u.png", event_id));
-            // delete c1;
 
             // Cleanup graphs for next event
             for (int ch = 0; ch < NUM_CHANNELS; ++ch) {
