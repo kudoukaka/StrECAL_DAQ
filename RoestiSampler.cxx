@@ -246,12 +246,8 @@ void RoestiSampler::InitTask()
 	if(rbcp.Write( buffwrap(0x08), THR_UPP             , 1) > 0){ LOG(info) << "-----SET: THR_UPP"; }
 	if(rbcp.Write( buffwrap(0x00), THR_LOW             , 1) > 0){ LOG(info) << "-----SET: THR_LOW"; }
 	if(rbcp.Write( buffwrap(0x08), TRIG                , 1) > 0){ LOG(info) << "-----SET: TRIG_TYPE"; } // 0x00-off, 0x02-base, 0x04-self, 0x08-normal
-	// if(rbcp.Write( buffwrap(0x00), ADC_OUT_PHASE_CH07  , 1) > 0){ LOG(info) << "-----SET: ADC_OUT_PHASE_CH07"; }
-	   // if(rbcp.Write( buffwrap(0x00), ADC_OUT_PHASE_CH815 , 1) > 0){ LOG(info) << "-----SET: ADC_OUT_PHASE_CH815"; }
-	// if(rbcp.Write( buffwrap(0x3c), ASD_CHECK_START_TIME, 1) > 0){ LOG(info) << "-----SET: ASD_CHECK_START_TIME"; } // ?
-	// if(rbcp.Write( buffwrap(0x46), ASD_WAIT_WIDTH      , 1) > 0){ LOG(info) << "-----SET: ASD_WAIT_WIDTH"; } // ?
-	if(rbcp.Write( buffwrap(60), ASD_CHECK_START_TIME  , 1) > 0){ LOG(info) << "-----SET: ASD_CHECK_START_TIME"; } // ?
-	if(rbcp.Write( buffwrap(70), ASD_WAIT_WIDTH        , 1) > 0){ LOG(info) << "-----SET: ASD_WAIT_WIDTH"; } // ?
+	if(rbcp.Write( buffwrap(0x3c), ASD_CHECK_START_TIME  , 1) > 0){ LOG(info) << "-----SET: ASD_CHECK_START_TIME"; } // 60
+	if(rbcp.Write( buffwrap(0x46), ASD_WAIT_WIDTH        , 1) > 0){ LOG(info) << "-----SET: ASD_WAIT_WIDTH"; } // 70
 	if(rbcp.Write( buffwrap(0x00), ZSUP                , 1) > 0){ LOG(info) << "-----SET: ZSUP"; } // 0x01-on, 0x00-off
 	if(rbcp.Write( buffwrap(0x01), DSEND               , 1) > 0){ LOG(info) << "-----SET: DSEND"; } // 0x01-on, 0x00-off
 	if(rbcp.Write( buffwrap(0x01), DAC_SYNC            , 1) > 0){ LOG(info) << "-----SET: DAC_SYNC"; }
@@ -394,6 +390,7 @@ bool RoestiSampler::ConditionalRun()
 		std::cout << " MBU: " << std::dec << pheader->mbu_count;
 		std::cout << ", Event Number: " << (pheader->event_num & 0xff) << std::endl;
 	#endif
+	LOG(debug4) << "SentEventNumber# " << pheader->event_num;
 
 	//---Read data packet
 	unsigned char *TCP_data = rec_buf + sizeof(struct Roesti::RoestiHeader);

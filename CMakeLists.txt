@@ -7,6 +7,7 @@ set(INSTALL_LIBDIR ${CMAKE_SOURCE_DIR}/lib)
 foreach(lvar IN ITEMS
 	RoestiSampler;
 	RoestiSink;
+  RoestiDash;
 )
   set(EXEC ${lvar})
   add_executable(${EXEC} 
@@ -38,8 +39,8 @@ foreach(lvar IN ITEMS
     FairMQStateMachine;
     FairLogger;
     ${ROOT_LIBRARIES};
-    #${HIREDIS_LIB};
-    #${REDIS_PLUS_PLUS_LIB};
+    ${HIREDIS_LIB};
+    ${REDIS_PLUS_PLUS_LIB};
   )
 
   install(TARGETS
