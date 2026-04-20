@@ -214,13 +214,13 @@ bool RoestiSink::HandleMultipartData(FairMQParts &msgParts, int index)
         LOG(debug4) << "Roesti Header mbu--->" << rhead->mbu_count;
         LOG(debug4) << "Roesti Header seumb--->" << rhead->seu_inf_size;
     #endif
-    LOG(debug4) << "RecievedEvent# " << event_id;
+    LOG(debug) << "RecievedEvent# " << event_id << "- From board: " << static_cast<uint32_t>(rhead->ipaddr & 0xff);
 
     
     // Create unique ROOT file
     std::ostringstream filename;
     // filename << "CalibratedWaveforms_STF_trigger" << stfId << ".root";
-    filename << "CalibratedWaveforms_STF_trigger_const.root";
+    filename << "CalibratedWaveforms_STF_trigger_const_comp.root";
     TFile* rtfile = new TFile(filename.str().c_str(), "RECREATE");
     if (rtfile->IsZombie()) {
         std::cerr << "Error creating ROOT file: "<< filename.str() << std::endl;

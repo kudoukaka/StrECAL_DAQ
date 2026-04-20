@@ -1,4 +1,3 @@
-
 #include <cstring>
 #include <fairmq/Device.h>
 #include <fairmq/runDevice.h>
@@ -10,7 +9,6 @@
 #include <chrono>
 #include <cstdint>
 
-#include <thread>
 
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -19,6 +17,7 @@
 #include <sys/ioctl.h>
 #include <signal.h>
 #include <hiredis/hiredis.h>
+#include <unistd.h>
 
 #include "SubTimeFrameHeader.h"
 #include "roesti.h"
@@ -31,19 +30,16 @@
 #include "utility/Hexdump.hpp"
 
 
-#define CONFIG_FILE_PATH "./roesti_boards.conf"
-
-
 char* buffwrap(unsigned char value){
     static unsigned char buffer_value[4]= {0x00, 0x00, 0x00, 0x00};
     buffer_value[0] = value;
     return reinterpret_cast<char *>(buffer_value);
   
 }
-char* buffcast(uint8_t num){
-    static char* bytePtr = reinterpret_cast<char*>(&num);
-    return bytePtr;
-}
+// char* buffcast(uint8_t num){
+//     static char* bytePtr = reinterpret_cast<char*>(&num);
+//     return bytePtr;
+// }
 
 
 namespace bpo = boost::program_options;
@@ -54,9 +50,10 @@ struct BoardConfig {
 	std::string ip;
     std::string prev_ip;
     std::array<unsigned char, 6> mac{{0x7C, 0xF0, 0x98, 0x01, 0x16, 0x00}};
-    CliSock sock;
-    int boardIndex{0};
-    std::map<unsigned int, unsigned char> registers;
+    // CliSock sock;
+    int boardIndex{-1};
+    int chainPosition{-1};  // Position in daisy chain (0 = first/master, 1 = second, etc.)
+    // std::map<unsigned int, unsigned char> registers;
 };
 
 // Ordered register configuration step
@@ -71,9 +68,10 @@ class RoestiSampler : public fair::mq::Device
 {
 public:
     struct OptionKey {
-        // static constexpr std::string_view DeviceIp	    {"ip"};
-        // static constexpr std::string_view DeviceIp_1	    {"ip"};
-        // static constexpr std::string_view DeviceIp_2	    {"ip"};
+        // static constexpr std::string_view DeviceIp	        {"ip"};
+        static constexpr std::string_view BoardIP          {"board-ip"};
+		static constexpr std::string_view ChainNum         {"chain-num"};
+        
         static constexpr std::string_view DataPort	        {"port"};
         static constexpr std::string_view ControlPort       {"control-port"};
         static constexpr std::string_view OutputChannelName {"out-chan-name"};
@@ -86,6 +84,8 @@ public:
         static constexpr std::string_view DefaultRegisters  {"default-regs"};
         static constexpr std::string_view RedisHost         {"redis-host"};
 		static constexpr std::string_view RedisPort         {"redis-port"};
+
+        static constexpr std::string_view BoardRegisters         {"registers"};
     };
 
     RoestiSampler() : fair::mq::Device() {};
@@ -105,10 +105,12 @@ protected:
 private:
 
     void LoadConfigFromRedis();
-    void ResetBoard(BoardConfig& board, RBCP& rbcp);
-    void ConfigureBoard(BoardConfig& board, RBCP& rbcp);
-
-    bool ReadBoardData(BoardConfig& board, fair::mq::Parts& outParts);
+    // void ResetBoard(BoardConfig& board, RBCP& rbcp);
+    // void ConfigureBoard(BoardConfig& board, RBCP& rbcp);
+    // bool ReadBoardData(BoardConfig& board, fair::mq::Parts& outParts);
+    void ResetBoard(RBCP& rbcp);
+    void ConfigureBoard(RBCP& rbcp);
+    bool ReadBoardData(fair::mq::Parts& outParts);
     bool SingleBoardReadout();
    
     void LoadHardcodedConfig();
@@ -119,9 +121,7 @@ private:
     CliSock fSock;
     std::string fOutputChannelName;
     std::string fDQMChannelName;
-    // std::string fDeviceIp       {"192.168.10.17"};
-    // std::string fDeviceIp_1     {"192.168.10.18"};
-    // std::string fDeviceIp_2     {"192.168.10.19"};
+    std::string fDeviceIp       {"000.000.000.000"};
     unsigned int fDataPort   = 24;
     unsigned int fControlPort = 4660;
     unsigned int fDeviceType  = 0x100;
@@ -130,12 +130,17 @@ private:
     uint64_t fMaxIterations = 10;
     KTimer fKt1;
 
-    std::vector<BoardConfig> fBoards;
-    std::map<unsigned int, unsigned char> fDefaultRegisters;
-    std::vector<RegisterStep> fRegisterSequence;
+    // std::vector<BoardConfig> fBoards;
+    // std::map<unsigned int, unsigned char> fDefaultRegisters;
+    // std::vector<RegisterStep> fRegisterSequence;
     
     std::string fRedisHost = "127.0.0.1";
     int fRedisPort = 6379;
+
+    BoardConfig fBoard;
+	std::vector<RegisterStep> fRegisterSequence;
+    int fChainNum = 0;  // Which chain this board belongs to
+    
 };
 
 
@@ -157,14 +162,18 @@ void addCustomOptions(bpo::options_description& options)
             bpo::value<std::string>()->default_value("dqm"),
             "DQM channel name")
 
-        // (opt::BoardIPs.data(),
-        //     bpo::value<std::vector<std::string>>()->multitoken(),
-        //     "List of board IP addresses (space-separated)")
+        (opt::BoardIP.data(),
+			bpo::value<std::string>()->required(),
+			"IP address of the board this sampler will read from")
+
+		(opt::ChainNum.data(),
+			bpo::value<int>()->default_value(0),
+			"Chain number this board belongs to (default: 0)")
 
         (opt::DataPort.data(),
             bpo::value<uint16_t>()->default_value(24),
             "Data port for all boards")
-
+ 
         (opt::ControlPort.data(),
             bpo::value<uint16_t>()->default_value(4660),
             "RBCP control port for all boards")
@@ -220,30 +229,30 @@ void RoestiSampler::Init()
 }
 
 
-void RoestiSampler::LoadHardcodedConfig()
-{
-    LOG(info) << "Loading hardcoded board configuration";
+// void RoestiSampler::LoadHardcodedConfig()
+// {
+//     LOG(info) << "Loading hardcoded board configuration";
     
-    std::vector<std::string> defaultIPs = {"192.168.10.17", "192.168.10.18", "192.168.10.19"};
+//     std::vector<std::string> defaultIPs = {"192.168.10.17", "192.168.10.18", "192.168.10.19"};
     
-    // for (size_t i = 0; i < defaultIPs.size(); ++i) {
-    //     BoardConfig board;
-    //     board.ip = defaultIPs[i];
-    //     board.boardIndex = i;
-    //     board.registers = fRegisterSequence; //board.registers = fRegisterSequence.begin(), fRegisterSequence.end());
+//     // for (size_t i = 0; i < defaultIPs.size(); ++i) {
+//     //     BoardConfig board;
+//     //     board.ip = defaultIPs[i];
+//     //     board.boardIndex = i;
+//     //     board.registers = fRegisterSequence; //board.registers = fRegisterSequence.begin(), fRegisterSequence.end());
         
         
-    //     // First board gets special daisy chain settings
-    //     if (i == 0) {
-    //         // board.registers[TRIG] = 0x02;
-    //         board.registers[DAISY_CHAIN] = 0x01;
-    //     }
+//     //     // First board gets special daisy chain settings
+//     //     if (i == 0) {
+//     //         // board.registers[TRIG] = 0x02;
+//     //         board.registers[DAISY_CHAIN] = 0x01;
+//     //     }
         
-    //     fBoards.push_back(board);
-    // }
+//     //     fBoards.push_back(board);
+//     // }
     
-    LOG(info) << "Loaded " << fBoards.size() << " boards from hardcoded defaults";
-}
+//     LOG(info) << "Loaded " << fBoards.size() << " boards from hardcoded defaults";
+// }
 
 // void RoestiSampler::StaticConfiguration(){
 //  if (rbcp.Write(buffcast(0x00), 0x16a, 1) > 0) { LOG(info) << "-----SET: 0x16a"; }
@@ -255,184 +264,188 @@ void RoestiSampler::LoadHardcodedConfig()
 
 void RoestiSampler::LoadConfigFromRedis()
 {
-    LOG(info) << "Attempting to connect to Redis at " << fRedisHost << ":" << fRedisPort;
-    
-    struct timeval timeout = { 1, 500000 }; // 1.5 seconds
-    redisContext *redis = redisConnectWithTimeout(fRedisHost.c_str(), fRedisPort, timeout);
-    
-    if (redis == nullptr || redis->err) {
-        if (redis) {
-            LOG(warn) << "Redis connection error: " << redis->errstr;
-            redisFree(redis);
-        } else {
-            LOG(warn) << "Redis connection error: can't allocate redis context";
-        }
-        LOG(warn) << "Redis not available, using hardcoded configuration";
-        LoadHardcodedConfig();
-        return;
-    }
+    LOG(info) << "Connecting to Redis at " << fRedisHost << ":" << fRedisPort;
+	
+	struct timeval timeout = { 1, 500000 }; // 1.5 seconds
+	redisContext *redis = redisConnectWithTimeout(fRedisHost.c_str(), fRedisPort, timeout);
+	
+	if (redis == nullptr || redis->err) {
+		if (redis) {
+			LOG(error) << "Redis connection error: " << redis->errstr;
+			redisFree(redis);
+		} else {
+			LOG(error) << "Redis connection error: can't allocate redis context";
+		}
+		throw std::runtime_error("Failed to connect to Redis");
+	}
 
-    LOG(info) << "Successfully connected to Redis";
+	LOG(info) << "Successfully connected to Redis";
 
-    // Select database 4
-    redisReply *selectReply = (redisReply*)redisCommand(redis, "SELECT 4");
-    if (selectReply == nullptr || selectReply->type == REDIS_REPLY_ERROR) {
-        LOG(error) << "Failed to select Redis database 4";
-        if (selectReply) freeReplyObject(selectReply);
-        redisFree(redis);
-        LoadHardcodedConfig();
-        return;
-    }
-    LOG(info) << "Selected Redis database 4";
-    freeReplyObject(selectReply);
+	// Select database 4
+	redisReply *selectReply = (redisReply*)redisCommand(redis, "SELECT 0");
+	if (selectReply == nullptr || selectReply->type == REDIS_REPLY_ERROR) {
+		LOG(error) << "Failed to select Redis database 4";
+		if (selectReply) freeReplyObject(selectReply);
+		redisFree(redis);
+		throw std::runtime_error("Failed to select Redis database");
+	}
+	freeReplyObject(selectReply);
 
+	// Build the Redis key for this chain: roesti:chain_<num>:boards
+	std::string chainKey = "roesti:chain_" + std::to_string(fChainNum) + ":boards";
+	LOG(info) << "Loading board chain from Redis key: " << chainKey;
 
-    // Get board IPs from Redis list: roesti:boards
-    // redisReply *reply = (redisReply*)redisCommand(redis, "LRANGE roesti:boards 0 -1");
-    // if (reply == nullptr) {
-    //     LOG(warn) << "Failed to read board list from Redis";
-    //     redisFree(redis);
-    //     LoadHardcodedConfig();
-    //     return;
-    // }
+	// Get the complete board chain from Redis
+	redisReply* reply = (redisReply*)redisCommand(redis, "LRANGE %s 0 -1", chainKey.c_str());
+	if (!reply || reply->type != REDIS_REPLY_ARRAY || reply->elements == 0) {
+		LOG(error) << "Failed to read board chain from Redis key: " << chainKey;
+		if (reply) freeReplyObject(reply);
+		redisFree(redis);
+		throw std::runtime_error("No board chain found in Redis for chain " + std::to_string(fChainNum));
+	}
 
+	// Find this board's position in the chain
+	bool found = false;
+	int totalBoards = reply->elements;
+	
+	for (size_t i = 0; i < reply->elements; ++i) {
+		std::string ip = reply->element[i]->str;
+		
+		if (ip == fBoard.ip) {
+			found = true;
+			fBoard.chainPosition = i;
+			fBoard.boardIndex = i;
+			
+			// Set previous board IP if not first
+			if (i > 0) {
+				fBoard.prev_ip = reply->element[i - 1]->str;
+				
+				// Calculate MAC[5] from previous board's last IP octet
+				int last_octet = std::stoi(fBoard.prev_ip.substr(fBoard.prev_ip.find_last_of('.') + 1));
+				fBoard.mac[5] = static_cast<unsigned char>(last_octet + 128 - 16);
+			}
+			
+			LOG(info) << "Board found in chain " << fChainNum << ":";
+			LOG(info) << "  IP: " << fBoard.ip;
+			LOG(info) << "  Position: " << fBoard.chainPosition << " of " << totalBoards;
+			LOG(info) << "  Role: " << (i == 0 ? "MASTER (first)" : 
+			                            (i == totalBoards - 1 ? "LAST" : "MIDDLE"));
+			if (!fBoard.prev_ip.empty()) {
+				LOG(info) << "  Previous board: " << fBoard.prev_ip;
+				LOG(info) << "  MAC[5]: 0x" << std::hex << static_cast<int>(fBoard.mac[5]) << std::dec;
+			}
+			
+			break;
+		}
+	}
 
-    redisReply* reply = (redisReply*)redisCommand(redis, "LRANGE roesti:boards 0 -1");
+	freeReplyObject(reply);
+	redisFree(redis);
 
-    if (!reply || reply->type != REDIS_REPLY_ARRAY || reply->elements == 0) {
-        if (reply) freeReplyObject(reply);
-        redisFree(redis);
-        LoadHardcodedConfig();
-        return;
-    }
-
-    fBoards.clear();
-
-    for (size_t i = 0; i < reply->elements; ++i) {
-        BoardConfig board{};
-        board.ip = reply->element[i]->str;
-        board.boardIndex = i;
-        board.registers = fDefaultRegisters;
-
-        if (i > 0) {
-            board.prev_ip = reply->element[i - 1]->str;
-
-            int last = std::stoi(board.prev_ip.substr(board.prev_ip.find_last_of('.') + 1));
-
-            board.mac[5] = static_cast<unsigned char>(last + 128 - 16);
-        }
-
-        fBoards.push_back(board);
-    }
-
-    freeReplyObject(reply);
-    redisFree(redis);
-
-    // LOG(info) << "Loaded " << fBoards.size() << " boards from Redis DB";
-    LOG(info) << "Configuration loaded from Redis: " << fBoards.size() << " boards";
-    for (size_t i = 0; i < fBoards.size(); ++i) {
-        LOG(info) << "  Board " << i << ": " << fBoards[i].ip 
-                  << " (" << fBoards[i].registers.size() << " registers)";
-    }
-
-
+	if (!found) {
+		LOG(error) << "Board IP " << fBoard.ip << " not found in Redis chain " << fChainNum;
+		throw std::runtime_error("Board IP not found in chain configuration");
+	}
 
 }
 
 
 
-void RoestiSampler::ResetBoard(BoardConfig& board, RBCP& rbcp)
+void RoestiSampler::ResetBoard(RBCP& rbcp)
 {
-    LOG(info) << "Board " << board.boardIndex << " - Performing reset sequence";
+    // LOG(info) << "Board " << board.boardIndex << " - Performing reset sequence";
 
-    if (!rbcp.Open(board.ip.c_str(), fControlPort)) {
-        LOG(error) << "Failed to RESET RBCP connection to board " << board.boardIndex;
-        return;
-    }
+    // if (!rbcp.Open(board.ip.c_str(), fControlPort)) {
+    //     LOG(error) << "Failed to RESET RBCP connection to board " << board.boardIndex;
+    //     return;
+    // }
+
+    LOG(info) << "Performing reset sequence for board at " << fBoard.ip;
+    
+    if (!rbcp.Open(fBoard.ip.c_str(), fControlPort)) {
+		LOG(error) << "Failed to open RBCP connection for reset";
+		throw std::runtime_error("RBCP connection failed");
+	}
 
     rbcp.Write(buffwrap(0x00), 0x16a, 1);
     rbcp.Write(buffwrap(0x00), 0x11d, 1);
     rbcp.Write(buffwrap(0xf0), 0x110, 1);
     rbcp.Write(buffwrap(0x01), 0x112, 1);
 
-    LOG(info) << "RESET: " << board.ip << " - DONE.";
-
-    // rbcp.Close();
+    // LOG(info) << "RESET: " << board.ip << " - DONE.";
+    
+    rbcp.Close();
+    LOG(info) << "Reset sequence complete";
 }
 
 
 
-void RoestiSampler::ConfigureBoard(BoardConfig& board, RBCP& rbcp)
+void RoestiSampler::ConfigureBoard(RBCP& rbcp)
 {
-    LOG(info) << "Configuring board " << board.boardIndex << " at IP: " << board.ip;
+    LOG(info) << "Configuring board at " << fBoard.ip << " (position " << fBoard.chainPosition << ")";
 
-    if (!rbcp.Open(board.ip.c_str(), fControlPort)) {
-        LOG(error) << "Failed to open RBCP connection to board " << board.boardIndex;
-        return;
-    }
+	if (!rbcp.Open(fBoard.ip.c_str(), fControlPort)) {
+		LOG(error) << "Failed to open RBCP connection";
+		throw std::runtime_error("RBCP connection failed");
+	}
 
-    LOG(info) << "Opened RBCP connection to " << board.ip << " Port " << fControlPort;
-    LOG(info) << "Sending initialization commands for board " << board.boardIndex;
+	LOG(info) << "Opened RBCP connection to " << fBoard.ip << " Port " << fControlPort;
 
-    // all register configurations
-    // for (const auto& [addr, val] : board.registers) {
-    //     if (rbcp.Write(buffwrap(val), addr, 1) > 0) {
-    //         LOG(debug) << "Board " << board.boardIndex << " - SET: 0x" 
-    //                    << std::hex << addr << " = 0x" << static_cast<int>(val) << std::dec;
-    //     } else {
-    //         LOG(error) << "Board " << board.boardIndex << " - FAILED: 0x" 
-    //                    << std::hex << addr << std::dec;
-    //     }
-    // }
+	// Get total number of boards in chain from the position
+	// (We know our position, so we can determine if we're last)
+	// This is set during LoadBoardConfigFromRedis based on chain length
+	bool isLastBoard = false;  // Will be set based on Redis data or can query again
+	
+	// Apply all register configurations in exact order from fRegisterSequence
+	for (const auto& step : fRegisterSequence) {
+		unsigned char val = step.value;
 
-    // std::vector<std::string> mac_addres = {"0x7C", "0xF0", "0x98", "0x01", "0x16", "0x00"}
+		// Override DAISY_CHAIN value based on board position
+		if (step.address == DAISY_CHAIN) {
+			// Last board gets 0x00, all others get 0x01
+			// For now, check if prev_ip exists (if board 0, no prev; if last, has prev but is still last)
+			// We need to know total chain length - store during Redis load
+			val = isLastBoard ? 0x00 : 0x01;
+		}
 
+		if (rbcp.Write(buffwrap(val), step.address, 1) > 0) {
+			LOG(debug) << "SET: " << step.description << " (0x" << std::hex 
+			           << step.address << ") = 0x" << static_cast<int>(val) << std::dec;
+		} else {
+			LOG(error) << "FAILED: " << step.description << " (0x" 
+			           << std::hex << step.address << ")" << std::dec;
+		}
+	}
 
-    for (const auto& step : fRegisterSequence) {
-        unsigned char value = step.value;
+	// If not the first board, configure previous board's IP and MAC
+	if (!fBoard.prev_ip.empty()) {
+		LOG(info) << "Configuring previous board IP: " << fBoard.prev_ip;
 
-        if (step.address == DAISY_CHAIN)
-            value = (board.boardIndex ==static_cast<int>(fBoards.size()) - 1) ? 0x00 : 0x01;
+		unsigned char ipb[4];
+		sscanf(fBoard.prev_ip.c_str(), "%hhu.%hhu.%hhu.%hhu", 
+		       &ipb[0], &ipb[1], &ipb[2], &ipb[3]);
 
-        // rbcp.Write(buffwrap(val), step.address, 1);
+		// Write IP address (reverse order: 0x163, 0x162, 0x161, 0x160)
+		rbcp.Write(buffwrap(ipb[0]), 0x163, 1);
+		rbcp.Write(buffwrap(ipb[1]), 0x162, 1);
+		rbcp.Write(buffwrap(ipb[2]), 0x161, 1);
+		rbcp.Write(buffwrap(ipb[3]), 0x160, 1);
 
-        if (rbcp.Write(buffwrap(value), step.address, 1) > 0) {
-          LOG(debug) << "Board " << board.boardIndex << " - SET: " 
-                    //  << step.description << " (0x" << std::hex << step.address << ") = 0x" << static_cast<int>(value)<< std::hex;
-                    //  << step.description << " (0x" << std::setfill('0') << std::setw(sizeof(value)*2) << value << ")" << std::dec;
-                    << step.description<< " (0x"<< std::hex << std::setw(8) << std::setfill('0')<< step.address 
-                    << ") = 0x" << std::setw(2) << std::setfill('0')<< static_cast<int>(value)<< std::dec;
-        } else {
-          LOG(error) << "Board " << board.boardIndex
-                     << " - FAILED: " << step.description << " (0x" << std::hex << step.address << ")" << std::dec;
-        }
-    }
+		// Write MAC address (6 bytes starting at 0x164)
+		for (size_t i = 0; i < fBoard.mac.size(); ++i) {
+			rbcp.Write(buffwrap(fBoard.mac[i]), 0x164 + i, 1);
+		}
 
-    if (!board.prev_ip.empty()) {
-        unsigned char ipb[4];
+		// Enable TCP
+		unsigned char one = 0x01;
+		rbcp.Write(buffwrap(one), 0x16a, 1);
+		rbcp.Write(buffwrap(one), 0x16d, 1);
+		
+		LOG(info) << "Previous board IP/MAC configuration complete";
+	}
 
-        LOG(info) << "PrevIP: " << board.prev_ip.c_str();
-
-        sscanf(board.prev_ip.c_str(),
-               "%hhu.%hhu.%hhu.%hhu",
-               &ipb[0], &ipb[1], &ipb[2], &ipb[3]);
-
-        
-        rbcp.Write(buffwrap(ipb[0]), 0x163, 1);
-        rbcp.Write(buffwrap(ipb[1]), 0x162, 1);
-        rbcp.Write(buffwrap(ipb[2]), 0x161, 1);
-        rbcp.Write(buffwrap(ipb[3]), 0x160, 1);
-
-        for (size_t i = 0; i < board.mac.size(); ++i)
-            rbcp.Write(buffwrap(board.mac[i]), 0x164 + i, 1);
-
-        unsigned char one = 0x01;
-        rbcp.Write(buffwrap(one), 0x16a, 1);
-        rbcp.Write(buffwrap(one), 0x16d, 1);
-    }
-
-    // rbcp.Close();
-    LOG(info) << "Board " << board.boardIndex << " configuration complete";
+	rbcp.Close();
+	LOG(info) << "Board configuration complete";
 }
 
 
@@ -446,6 +459,9 @@ void RoestiSampler::InitTask() {
     PrintConfig(fConfig, "chans.", __PRETTY_FUNCTION__);
 
     using opt = OptionKey;
+
+    fBoard.ip = fConfig->GetValue<std::string>(opt::BoardIP.data());
+	fChainNum = fConfig->GetValue<int>(opt::ChainNum.data());
 
     fOutputChannelName = fConfig->GetValue<std::string>(opt::OutputChannelName.data());
 	fDQMChannelName = fConfig->GetValue<std::string>(opt::DQMChannelName.data());
@@ -483,7 +499,7 @@ void RoestiSampler::InitTask() {
 		{ADC_TEST_CH815,      0x00, "ADC_TEST_CH815"},
 		{THR_UPP,             0x08, "THR_UPP"},
 		{THR_LOW,             0x00, "THR_LOW"},
-		{TRIG,                0x02, "TRIG"},               
+		{TRIG,                0x04, "TRIG"},               
 		{ASD_CHECK_START_TIME,180, "ASD_CHECK_START_TIME"},
 		{ASD_WAIT_WIDTH,      210, "ASD_WAIT_WIDTH"},
 		{ZSUP,                0x00, "ZSUP"},
@@ -504,23 +520,48 @@ void RoestiSampler::InitTask() {
     // Load configuration from redis
     LoadConfigFromRedis();
 
-    LOG(info) << "Configuration set for " << fBoards.size() << " boards";
+    // LOG(info) << "Configuration set for " << fBoards.size() << " boards";
     // LOG(info) << "Number of destinations: " << fNumDestination;
 
-    // Configure all boards
+    
     RBCP rbcp;
   
+    // ---Configure all boards
+    // for (auto& board : fBoards){
+    //     ResetBoard(board, rbcp);
+    // }
 
-    for (auto& board : fBoards){
-        ResetBoard(board, rbcp);
-    }
+    // for (auto it = fBoards.rbegin();it != fBoards.rend(); ++it){
+    //     ConfigureBoard(*it, rbcp);
+    // }
 
-    for (auto it = fBoards.rbegin();it != fBoards.rend(); ++it){
-        ConfigureBoard(*it, rbcp);
-    }
+    // rbcp.Close();
 
-    rbcp.Close();
-        
+    // Validate that board was found and configured
+	if (fBoard.boardIndex < 0) {
+		LOG(error) << "Board IP " << fBoard.ip << " not found in Redis chain " << fChainNum;
+		LOG(error) << "Cannot proceed with initialization";
+		throw std::runtime_error("Board not configured - not found in Redis");
+	}
+
+    // RESET PHASE
+	LOG(info) << "\n========== RESET PHASE ==========";
+	ResetBoard(rbcp);
+
+	
+	// Wait after reset
+	LOG(info) << "Waiting 1 second after reset...";
+	std::this_thread::sleep_for(std::chrono::seconds(1));
+	
+	// SETUP PHASE
+	LOG(info) << "\n========== SETUP PHASE ==========";
+	ConfigureBoard(rbcp);
+
+    
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    // rbcp.Close();
+
+    LOG(info) << "\n========== INITIALIZATION COMPLETE ==========\n";
 
 }
 
@@ -625,7 +666,7 @@ bool RoestiSampler::SingleBoardReadout(){
         std::cout << " MBU: " << std::dec << pheader->mbu_count;
         std::cout << ", Event Number: " << (pheader->event_num & 0xff) << std::endl;
     #endif
-    LOG(debug4) << "SentEventNumber# " << pheader->event_num;
+    // LOG(debug4) << "SentEventNumber# " << (pheader->event_num & 0xff) << std::endl;
 
     //---Read data packet
     unsigned char *TCP_data = rec_buf + sizeof(struct Roesti::RoestiHeader);
@@ -712,11 +753,12 @@ bool RoestiSampler::SingleBoardReadout(){
     pstfheader->time_sec = now.tv_sec;
     pstfheader->time_usec = now.tv_usec;
 
-    // std::cout << "-------STF HEADER VALUES--------"<< std::endl;
-    // std::cout << "Magic:" << std::hex << pstfheader->magic << std::endl;
-    // std::cout << "Event:" << std::dec << pstfheader->timeFrameId << std::endl;
-    // std::cout << "IP" << std::dec << pstfheader->FEMId << std::endl;
-
+    #ifdef DEBUG
+        // std::cout << "-------STF HEADER VALUES--------"<< std::endl;
+        // std::cout << "Magic:" << std::hex << pstfheader->magic << std::endl;
+        // std::cout << "Event:" << std::dec << pstfheader->timeFrameId << std::endl;
+        // std::cout << "IP" << std::dec << pstfheader->FEMId << std::endl;
+    #endif
 
     //--roesti header+ datapacket exact
     unsigned int fullPacketSize = sizeof(struct Roesti::RoestiHeader) + 
@@ -734,22 +776,6 @@ bool RoestiSampler::SingleBoardReadout(){
     msgbuf+=sizeof(struct Roesti::RoestiHeader);
     memcpy(msgbuf, TCP_data, dp_len);
 
-    
-    // char *body_packet = reinterpret_cast<char *>(msgRoesti.GetData());
-    // memcpy(body_packet, reinterpret_cast<char *>(&TCP_data), pheader->length);
-
-    // struct Roesti::DataPacketHeader *ppheader = reinterpret_cast<Roesti::DataPacketHeader *>(msgRoesti.GetData());
-    // ppheader = reinterpret_cast<struct Roesti::DataPacketHeader *>(TCP_data);
-    
-    // struct Roesti::RoestiHeader *rhead = reinterpret_cast<struct Roesti::RoestiHeader *>(msgRoesti.GetData());
-    // memcpy(rhead, pheader, header_size);
-    
-    // struct Roesti::RoestiDataBody *roestidata = reinterpret_cast<struct Roesti::RoestiDataBody *>(msgRoesti.GetData());
-    // memcpy(roestidata, TCP_data, dp_read);
-
-    // struct Roesti::RoestiFooter *rfoot = reinterpret_cast<struct Roesti::RoestiFooter *>(msgRoesti.GetData());
-    // memcpy(rfoot, pfooter, footer_size);
-
 
     // Send all outParts
     Send(outParts, fOutputChannelName);
@@ -760,98 +786,139 @@ bool RoestiSampler::SingleBoardReadout(){
     return true;
 }
 
-bool RoestiSampler::ReadBoardData(BoardConfig& board, fair::mq::Parts& outParts)
+bool RoestiSampler::ReadBoardData(fair::mq::Parts& outParts)
 {
     int nflag;
-    unsigned char rec_buf[40*1000];
-    
-    struct Roesti::RoestiHeader *pheader = reinterpret_cast<struct Roesti::RoestiHeader *>(rec_buf);
-    int header_size = sizeof(struct Roesti::RoestiHeader);
+	unsigned char rec_buf[40*1000];
+	
+	struct Roesti::RoestiHeader *pheader = reinterpret_cast<struct Roesti::RoestiHeader *>(rec_buf);
+	int header_size = sizeof(struct Roesti::RoestiHeader);
 
-    int header_read = board.sock.Receive(reinterpret_cast<char *>(pheader), header_size, nflag);
+    // -- check empty header
+    if (header_size == 0) {
+        LOG(warn) << "Zero-length header";
+        return false;
+    }
+    
+
+    int header_read = fSock.Receive(reinterpret_cast<char *>(pheader), sizeof(struct Roesti::RoestiHeader) , nflag);
+
 
     if (header_read < header_size) {
-        LOG(warn) << "Board " << board.boardIndex << " - Irregular header size: " 
-                  << header_read << "/" << header_size;
+        LOG(warn) << "Irregal header data size : " << header_read << "/" << header_size;
         if (nflag == EAGAIN) {
-            LOG(warn) << "Board " << board.boardIndex << " - Timeout, retrying";
-            int hh = board.sock.Receive(reinterpret_cast<char *>(pheader) + header_read,
-                header_size - header_read, nflag);
+            LOG(warn) << "Timeout and Retry";
+            int hh = fSock.Receive(reinterpret_cast<char *>(pheader) + header_read,
+                 header_size - header_read, nflag);
             header_read += hh;
             if (header_read < header_size) {
-                LOG(error) << "Board " << board.boardIndex << " - Failed to read complete header";
-                return false;
+                if (nflag == EAGAIN) {
+                    std::cout << "Timeout anagin..." << std::endl;
+                } else {
+                    std::cout << "Unknown error..." << std::endl;
+                }
             }
         } else {
-            return false;
+            return true;
         }
     }
 
-    #ifdef DEBUG
-        LOG(debug) << "Board " << board.boardIndex << " - Event: " << pheader->event_num 
-                   << ", Length: " << pheader->length;
-    #endif
-
+	//---Read data packet
     unsigned char *TCP_data = rec_buf + sizeof(struct Roesti::RoestiHeader);
+    
     unsigned int dp_read = 0;
     unsigned int dp_len = pheader->length;
 
-    dp_read = board.sock.Receive(reinterpret_cast<char *>(TCP_data), dp_len, nflag);
-    
-    if (dp_read < dp_len) {
-        LOG(error) << "Board " << board.boardIndex << " - Insufficient data: " 
-                   << dp_read << "/" << dp_len;
-        if (nflag == EAGAIN) {
-            dp_read += board.sock.Receive(reinterpret_cast<char *>(TCP_data) + dp_read, 
-                                           dp_len - dp_read, nflag);
-        }
-        if (dp_read < dp_len) return false;
+    // -- check empty packet
+    if (dp_len == 0) {
+        LOG(warn) << "Zero-length packet";
+        return false;
     }
 
+        dp_read += fSock.Receive(reinterpret_cast<char *>(TCP_data), dp_len - dp_read, nflag);
+        
+        
+        #ifdef DEBUG
+            std::cout<< "--------------------DATA--------------------" << std::endl;
+            std::cout << "data packet read/length: " << dp_read << "/" << dp_len << std::endl;
+        #endif
+        
+        // if (dp_read >= dp_len) {
+        // 	LOG(warn) << "Length check: " << dp_read << "/" << dp_len;
+        // }else
+        
+        
+        // if (dp_read < dp_len){
+        //     LOG(error) << "Insufficent size of data";
+          if (dp_read <= 0 || dp_read < dp_len) {
+            LOG(warn) << "Incomplete/empty packet: " << dp_read << "/" << dp_len;
+            return false;
+        }else{
+            if (nflag == EAGAIN) {
+                LOG(warn) << "Timeout and Retry";
+                dp_read += fSock.Receive(reinterpret_cast<char *>(TCP_data), dp_len - dp_read, nflag);
+            }
+        }
+
+
+    //--- Unpack data packet
     CheckRoestiDataPacket(TCP_data, dp_read);
 
-    // Read footer
+    //---Read footer
+
     int footer_size = 8;
     char recvbuff[16];
     struct Roesti::RoestiFooter *pfooter = reinterpret_cast<Roesti::RoestiFooter *>(recvbuff);
-    int footer_read = board.sock.Receive(reinterpret_cast<char *>(&recvbuff), footer_size, nflag);
+    int footer_read = fSock.Receive(reinterpret_cast<char *>(&recvbuff), footer_size, nflag);
 
     #ifdef DEBUG
-        LOG(debug) << "Board " << board.boardIndex << " - Footer read: " << footer_read;
+        std::cout<< "--------------------FOOTER--------------------" << std::endl;
+        std::cout << "Footer: size:" << std::dec << footer_read
+            << ", key: 0x" << std::hex << pfooter->footer
+            << ", crc: 0x" << std::hex << pfooter->crc32 << std::endl;
+        std::cout << std::dec;
     #endif
 
-    // Create STF header
+    //---stf
     outParts.AddPart(NewMessage(sizeof(SubTimeFrame::Header)));
-    auto &msgSTFHeader = outParts[outParts.Size() - 1];
-    
-    struct SubTimeFrame::Header *pstfheader = 
-        reinterpret_cast<struct SubTimeFrame::Header *>(msgSTFHeader.GetData());
+    auto &msgSTFHeader = outParts[0];
+
+    struct SubTimeFrame::Header *pstfheader = reinterpret_cast<struct SubTimeFrame::Header *>(msgSTFHeader.GetData());
 
     pstfheader->magic = SubTimeFrame::Magic;
     pstfheader->timeFrameId = pheader->event_num;
     pstfheader->FEMType = static_cast<uint32_t>(pheader->type) & 0xff;
-    pstfheader->FEMId = board.boardIndex; // Use board index as FEM ID
-    pstfheader->length = pheader->length;
+    pstfheader->FEMId = static_cast<uint32_t>(pheader->ipaddr) & 0xff;
+    // pstfheader->length = sizeof(struct SubTimeFrame::Header) + sizeof(struct Roesti::RoestiHeader)+sizeof(rec_buf);
+    pstfheader->length =  pheader->length;//dp_len; //sizeof(struct SubTimeFrame::Header);
     pstfheader->numMessages = 1;
-    
     struct timeval now;
     gettimeofday(&now, nullptr);
     pstfheader->time_sec = now.tv_sec;
     pstfheader->time_usec = now.tv_usec;
+    
+    pstfheader->chain_num = 0;
+    pstfheader->board_num = 0;
 
-    // Create Roesti data message
+
+    //--roesti header+ datapacket exact
     unsigned int fullPacketSize = sizeof(struct Roesti::RoestiHeader) + 
-                                  sizeof(Roesti::DataPacketHeader) + 
+                                  sizeof(Roesti::DataPacketHeader) +
                                   pheader->length + 
                                   sizeof(Roesti::DataPacketFooter);
-    
     outParts.AddPart(NewMessage(fullPacketSize));
-    auto &msgRoesti = outParts[outParts.Size() - 1];
+
+
+
+    // outParts.AddPart(NewMessage(sizeof(rec_buf)));
+    auto &msgRoesti = outParts[1];
 
     char *msgbuf = reinterpret_cast<char *>(msgRoesti.GetData());
+    // memcpy(msgbuf, rec_buf, sizeof(rec_buf));
     memcpy(msgbuf, pheader, sizeof(struct Roesti::RoestiHeader));
-    msgbuf += sizeof(struct Roesti::RoestiHeader);
+    msgbuf+=sizeof(struct Roesti::RoestiHeader);
     memcpy(msgbuf, TCP_data, dp_len);
+
 
     return true;
 }
@@ -863,25 +930,41 @@ bool RoestiSampler::ConditionalRun()
     // SingleBoardReadout();
 
     //--multi
-    for (auto& board : fBoards) {
-		fair::mq::Parts outParts;  // Fresh parts for each board
+    // for (auto& board : fBoards) {
+	// 	fair::mq::Parts outParts;  // Fresh parts for each board
 		
-		if (!ReadBoardData(board, outParts)) {
-			LOG(error) << "Failed to read data from board " << board.boardIndex;
-			continue;  // Skip this board
-		}
+	// 	if (!ReadBoardData(board, outParts)) {
+	// 		LOG(error) << "Failed to read data from board " << board.boardIndex;
+	// 		continue;  // Skip this board
+	// 	}
 
-		if (outParts.Size() > 0) {
-			Send(outParts, fOutputChannelName);
-			// #ifdef DEBUG
-				LOG(debug) << "Sent data from board " << board.ip;
-			// #endif
-		}
+	// 	if (outParts.Size() > 0) {
+	// 		Send(outParts, fOutputChannelName);
+	// 		// #ifdef DEBUG
+	// 			LOG(debug) << "Sent data from board " << board.ip;
+	// 		// #endif
+	// 	}
+	// }
+
+    // return true;
+
+    //--single new
+    fair::mq::Parts outParts;
+	
+	if (!ReadBoardData(outParts)) {
+		LOG(error) << "Failed to read data from board";
+		
 	}
+    if (outParts.Size() > 0) {
+		Send(outParts, fOutputChannelName);
+	}
+	
 
-    
+    // ---read and send in one function
+    // SingleBoardReadout();
 
-    return true;
+	return true;
+
     
 }
 
@@ -892,10 +975,13 @@ void RoestiSampler::PostRun()
 // 	fNumIterations = 0;
     // fSock.Close();
 
+    // LOG(debug) << __FUNCTION__;
+    // for (auto& board : fBoards) {
+    //     board.sock.Close();
+    // }
+
     LOG(debug) << __FUNCTION__;
-    for (auto& board : fBoards) {
-        board.sock.Close();
-    }
+	fSock.Close();
 }
 
 
@@ -907,37 +993,53 @@ void RoestiSampler::PreRun()
     // if (fTimeout_ms > 0) fSock.SetTimeOut_ms(fTimeout_ms);
     // // fSock.SetBuffer(33554432);
     // int sock = fSock.Connect(fDeviceIp.c_str(), fDataPort);
+    
     // if (sock < 0) {
-    // 	LOG(error) << "Connection err. " << fDeviceIp << " " << fDataPort;
-    // 	//return false;
-    // 	// return;
+    //         LOG(error) << "Connection error for board " << board.boardIndex 
+    // } else {
+    //         LOG(info) << "Connected to board " << board.boardIndex 
+    //                   << " at " << board.ip << ":" << fDataPort;
     // }
-    // //return true;
     // return;
 
     //--multiboard
-    LOG(debug) << __FUNCTION__;
+    // LOG(debug) << __FUNCTION__;
     
-    for (auto& board : fBoards) {
-        if (fTimeout_ms > 0) {
-            board.sock.SetTimeOut_ms(fTimeout_ms);
-        }
+    // for (auto& board : fBoards) {
+    //     if (fTimeout_ms > 0) {
+    //         board.sock.SetTimeOut_ms(fTimeout_ms);
+    //     }
         
-        int sock = board.sock.Connect(board.ip.c_str(), fDataPort);
-        if (sock < 0) {
-            LOG(error) << "Connection error for board " << board.boardIndex 
-                       << " at " << board.ip << ":" << fDataPort;
-        } else {
-            LOG(info) << "Connected to board " << board.boardIndex 
-                      << " at " << board.ip << ":" << fDataPort;
-        }
-    }
+    //     int sock = board.sock.Connect(board.ip.c_str(), fDataPort);
+    //     if (sock < 0) {
+    //         LOG(error) << "Connection error for board " << board.boardIndex 
+    //                    << " at " << board.ip << ":" << fDataPort;
+    //     } else {
+    //         LOG(info) << "Connected to board " << board.boardIndex 
+    //                   << " at " << board.ip << ":" << fDataPort;
+    //     }
+    // }
+
+    LOG(debug) << __FUNCTION__;
+	
+	if (fTimeout_ms > 0) {
+		fSock.SetTimeOut_ms(fTimeout_ms);
+	}
+	
+	int sock = fSock.Connect(fBoard.ip.c_str(), fDataPort);
+	if (sock < 0) {
+		LOG(error) << "Connection error at " << fBoard.ip << ":" << fDataPort;
+		throw std::runtime_error("Failed to connect to board");
+	} else {
+		LOG(info) << "Connected to board at " << fBoard.ip << ":" << fDataPort;
+	}
+    
 
 }
 
 
 void RoestiSampler::Run()
 {
-    // LOG(debug) << __FUNCTION__;
+    LOG(debug) << __FUNCTION__;
 }
 

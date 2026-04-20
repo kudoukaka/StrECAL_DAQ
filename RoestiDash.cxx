@@ -162,7 +162,7 @@ bool LoadPedestalForBoard(const std::string& filename)
     return true;
 }
 
-constexpr double SAMPLE_PERIOD = 1e-6; // 1 MHz sampling
+// constexpr double SAMPLE_PERIOD = 1e-6; // 1 MHz sampling
 // Convert waveform to JSON
 // std::string makeWaveformJSON(const std::vector<double>& y) {
 //     // std::vector<double> x(NUM_SAMPLE);
@@ -311,7 +311,9 @@ bool RoestiDash::HandleMultipartData(FairMQParts &msgParts, int index)
                 oss << "],\"unit\":\"mV\"}";
 
                 std::string payload = oss.str();
-                std::string key = "slowdash:wave:ch" + std::to_string(ch);
+                // std::string key = "slowdash:wave:ch" + std::to_string(ch);
+
+                 std::string key ="slowdash:chain:0:board:0:channel:" + std::to_string(ch);
 
                 // redisReply* reply = (redisReply*)redisCommand(redisCtx, "SET %s %s",
                 //                                               key.c_str(), payload.c_str());
