@@ -229,43 +229,13 @@ void RoestiSampler::Init()
 }
 
 
-// void RoestiSampler::LoadHardcodedConfig()
-// {
-//     LOG(info) << "Loading hardcoded board configuration";
-    
-//     std::vector<std::string> defaultIPs = {"192.168.10.17", "192.168.10.18", "192.168.10.19"};
-    
-//     // for (size_t i = 0; i < defaultIPs.size(); ++i) {
-//     //     BoardConfig board;
-//     //     board.ip = defaultIPs[i];
-//     //     board.boardIndex = i;
-//     //     board.registers = fRegisterSequence; //board.registers = fRegisterSequence.begin(), fRegisterSequence.end());
-        
-        
-//     //     // First board gets special daisy chain settings
-//     //     if (i == 0) {
-//     //         // board.registers[TRIG] = 0x02;
-//     //         board.registers[DAISY_CHAIN] = 0x01;
-//     //     }
-        
-//     //     fBoards.push_back(board);
-//     // }
-    
-//     LOG(info) << "Loaded " << fBoards.size() << " boards from hardcoded defaults";
-// }
-
-// void RoestiSampler::StaticConfiguration(){
-//  if (rbcp.Write(buffcast(0x00), 0x16a, 1) > 0) { LOG(info) << "-----SET: 0x16a"; }
-// 	if (rbcp.Write(buffcast(0x00), 0x11d, 1) > 0) { LOG(info) << "-----SET: 0x11d"; }
-// 	if (rbcp.Write(buffcast(0xf0), 0x110, 1) > 0) { LOG(info) << "-----SET: 0x110"; }
-// 	if (rbcp.Write(buffcast(0x01), 0x112, 1) > 0) { LOG(info) << "-----SET: 0x112"; }
-// }
-
 
 void RoestiSampler::LoadConfigFromRedis()
 {
     LOG(info) << "Connecting to Redis at " << fRedisHost << ":" << fRedisPort;
 	
+    // TODO: Use options plugin to read the value from redis
+
 	struct timeval timeout = { 1, 500000 }; // 1.5 seconds
 	redisContext *redis = redisConnectWithTimeout(fRedisHost.c_str(), fRedisPort, timeout);
 	
@@ -281,7 +251,7 @@ void RoestiSampler::LoadConfigFromRedis()
 
 	LOG(info) << "Successfully connected to Redis";
 
-	// Select database 4
+	// Select database 0
 	redisReply *selectReply = (redisReply*)redisCommand(redis, "SELECT 0");
 	if (selectReply == nullptr || selectReply->type == REDIS_REPLY_ERROR) {
 		LOG(error) << "Failed to select Redis database 4";
@@ -292,7 +262,7 @@ void RoestiSampler::LoadConfigFromRedis()
 	freeReplyObject(selectReply);
 
 	// Build the Redis key for this chain: roesti:chain_<num>:boards
-	std::string chainKey = "roesti:chain_" + std::to_string(fChainNum) + ":boards";
+	std::string chainKey = "roesti:chain:" + std::to_string(fChainNum) + ":boards";
 	LOG(info) << "Loading board chain from Redis key: " << chainKey;
 
 	// Get the complete board chain from Redis
@@ -304,6 +274,7 @@ void RoestiSampler::LoadConfigFromRedis()
 		throw std::runtime_error("No board chain found in Redis for chain " + std::to_string(fChainNum));
 	}
 
+    //--IP and MAC calculation
 	// Find this board's position in the chain
 	bool found = false;
 	int totalBoards = reply->elements;
@@ -391,9 +362,7 @@ void RoestiSampler::ConfigureBoard(RBCP& rbcp)
 
 	LOG(info) << "Opened RBCP connection to " << fBoard.ip << " Port " << fControlPort;
 
-	// Get total number of boards in chain from the position
-	// (We know our position, so we can determine if we're last)
-	// This is set during LoadBoardConfigFromRedis based on chain length
+	// Get total number of boards in chain from the position, LoadBoardConfigFromRedis based on chain length
 	bool isLastBoard = false;  // Will be set based on Redis data or can query again
 	
 	// Apply all register configurations in exact order from fRegisterSequence
@@ -403,8 +372,6 @@ void RoestiSampler::ConfigureBoard(RBCP& rbcp)
 		// Override DAISY_CHAIN value based on board position
 		if (step.address == DAISY_CHAIN) {
 			// Last board gets 0x00, all others get 0x01
-			// For now, check if prev_ip exists (if board 0, no prev; if last, has prev but is still last)
-			// We need to know total chain length - store during Redis load
 			val = isLastBoard ? 0x00 : 0x01;
 		}
 
@@ -451,9 +418,8 @@ void RoestiSampler::ConfigureBoard(RBCP& rbcp)
 
 
 void RoestiSampler::InitTask() {
-  LOG(debug) << __FUNCTION__;
+    LOG(debug) << __FUNCTION__;
 
-//   try {
 
     PrintConfig(fConfig, "channel-config", __PRETTY_FUNCTION__);
     PrintConfig(fConfig, "chans.", __PRETTY_FUNCTION__);
@@ -474,13 +440,15 @@ void RoestiSampler::InitTask() {
 		
 	fNumDestination = GetNumSubChannels(fOutputChannelName);
 
-    // LOG(info) << "Configuration loaded:";
-    // LOG(info) << "  Output channel: " << fOutputChannelName;
-    // LOG(info) << "  Data port: " << fDataPort;
-    // LOG(info) << "  Control port: " << fControlPort;
-    // LOG(info) << "  Timeout: " << fTimeout_ms << " ms";
-    // LOG(info) << "  Redis: " << fRedisHost << ":" << fRedisPort;
-    // LOG(info) << "  Number of destinations: " << fNumDestination;
+    #ifdef DEBUG
+        LOG(info) << "Configuration loaded:";
+        LOG(info) << "  Output channel: " << fOutputChannelName;
+        LOG(info) << "  Data port: " << fDataPort;
+        LOG(info) << "  Control port: " << fControlPort;
+        LOG(info) << "  Timeout: " << fTimeout_ms << " ms";
+        LOG(info) << "  Redis: " << fRedisHost << ":" << fRedisPort;
+        LOG(info) << "  Number of destinations: " << fNumDestination;
+    #endif
 
     fRegisterSequence = {
         {RESET_INTR,          0xf0, "RESET_INTR"},
@@ -526,16 +494,6 @@ void RoestiSampler::InitTask() {
     
     RBCP rbcp;
   
-    // ---Configure all boards
-    // for (auto& board : fBoards){
-    //     ResetBoard(board, rbcp);
-    // }
-
-    // for (auto it = fBoards.rbegin();it != fBoards.rend(); ++it){
-    //     ConfigureBoard(*it, rbcp);
-    // }
-
-    // rbcp.Close();
 
     // Validate that board was found and configured
 	if (fBoard.boardIndex < 0) {
@@ -616,175 +574,6 @@ int CheckRoestiDataPacket(unsigned char *data, int len) {
     return 0;
 }
 
-// single board
-bool RoestiSampler::SingleBoardReadout(){
-    fair::mq::Parts outParts;
-
-    int nflag;
-
-    //---Read header
-
-    unsigned char rec_buf[40*1000];
-    struct Roesti::RoestiHeader *pheader = reinterpret_cast<struct Roesti::RoestiHeader *>(rec_buf);
-    int header_size = sizeof(struct Roesti::RoestiHeader);
-
-    int header_read = fSock.Receive(reinterpret_cast<char *>(pheader), sizeof(struct Roesti::RoestiHeader) , nflag);
-
-    
-    if (header_read < header_size) {
-        LOG(warn) << "Irregal header data size : " << header_read << "/" << header_size;
-        if (nflag == EAGAIN) {
-            LOG(warn) << "Timeout and Retry";
-            int hh = fSock.Receive(reinterpret_cast<char *>(pheader) + header_read,
-                 header_size - header_read, nflag);
-            header_read += hh;
-            if (header_read < header_size) {
-                if (nflag == EAGAIN) {
-                    std::cout << "Timeout anagin..." << std::endl;
-                } else {
-                    std::cout << "Unknown error..." << std::endl;
-                }
-            }
-        } else {
-            return true;
-        }
-    }
-
-    #ifdef DEBUG
-        std::cout<< "--------------------HEADER--------------------" << std::endl;
-        std::cout << "body length size: " << sizeof(pheader->length)
-            << " / body length value: " << pheader->length << std::endl;
-        // std::cout << "event number: " << pheader->event_num << std::endl;
-
-        std::cout << "MAGIC: 0x" << std::hex << pheader->magic;
-        std::cout << ", Type: 0x" << std::hex << pheader->type;
-        std::cout << ", IP: " << std::dec << (pheader->ipaddr & 0xff00 >> 16)
-            << "." << (pheader->ipaddr & 0xff) << std::endl;
-        std::cout << " Len: " << std::dec << pheader->length;
-        std::cout << " SEU: " << std::dec << pheader->seu_count;
-        std::cout << " SEU size: " << std::dec << pheader->seu_inf_size;
-        std::cout << " MBU: " << std::dec << pheader->mbu_count;
-        std::cout << ", Event Number: " << (pheader->event_num & 0xff) << std::endl;
-    #endif
-    // LOG(debug4) << "SentEventNumber# " << (pheader->event_num & 0xff) << std::endl;
-
-    //---Read data packet
-    unsigned char *TCP_data = rec_buf + sizeof(struct Roesti::RoestiHeader);
-    
-    unsigned int dp_read = 0;
-    unsigned int dp_len = pheader->length;
-
-    // for (int i = 0 ; i < 10 ; i++) {
-        dp_read += fSock.Receive(reinterpret_cast<char *>(TCP_data), dp_len - dp_read, nflag);
-        
-        #ifdef DEBUG
-            std::cout<< "--------------------DATA--------------------" << std::endl;
-            std::cout << "data packet read/length: " << dp_read << "/" << dp_len << std::endl;
-        #endif
-        
-        // if (dp_read >= dp_len) {
-        // 	LOG(warn) << "Length check: " << dp_read << "/" << dp_len;
-        // }else 
-        if (dp_read < dp_len){
-            LOG(error) << "Insufficent size of data";
-        }else{
-            if (nflag == EAGAIN) {
-                LOG(warn) << "Timeout and Retry";
-                dp_read += fSock.Receive(reinterpret_cast<char *>(TCP_data), dp_len - dp_read, nflag);
-            }
-            // else {
-            // 	LOG(warn) << "Length check: " << dp_read << "/" << dp_len;
-            // 	// std::cout << "Unknown error... at data reading" << std::endl;
-            // 	// return true;
-            // }
-        }
-
-    //---custom hexdump into file from stream
-    // hexdump(reinterpret_cast<char *>(&TCP_data), dp_read);
-    // std::ofstream out("./dataout/procout.dat");
-    // std::streambuf *coutbuf = std::cout.rdbuf(); //save old buf
-    // std::cout.rdbuf(out.rdbuf()); //redirect std::cout to out.txt!
-    // std::cout << CustomHexdump<16, false>(&TCP_data, sizeof(TCP_data)) << std::endl;
-    // std::cout.rdbuf(coutbuf);
-
-    //--- Unpack data packet
-
-    CheckRoestiDataPacket(TCP_data, dp_read);
-    
-    // check buffer with output to file
-    // std::ofstream outputFile("./dataout/datapacket.bin", std::ios::binary); 
-    // outputFile.write(reinterpret_cast<char *>(TCP_data), dp_len);
-    // // outputFile.write(reinterpret_cast<char *>(pheader),sizeof(struct Roesti::RoestiHeader));
-    // outputFile.close();
-
-    //---Read footer
-
-    int footer_size = 8;
-    char recvbuff[16];
-    struct Roesti::RoestiFooter *pfooter = reinterpret_cast<Roesti::RoestiFooter *>(recvbuff);
-    int footer_read = fSock.Receive(reinterpret_cast<char *>(&recvbuff), footer_size, nflag);
-
-    #ifdef DEBUG
-        std::cout<< "--------------------FOOTER--------------------" << std::endl;
-        std::cout << "Footer: size:" << std::dec << footer_read
-            << ", key: 0x" << std::hex << pfooter->footer
-            << ", crc: 0x" << std::hex << pfooter->crc32 << std::endl;
-        std::cout << std::dec;
-    #endif
-
-    //This needs to become full packet send
-    // outParts.AddPart(NewMessage(sizeof(struct Roesti::RoestiHeader)));
-
-    //---stf
-    outParts.AddPart(NewMessage(sizeof(SubTimeFrame::Header)));
-    auto &msgSTFHeader = outParts[0];
-
-    struct SubTimeFrame::Header *pstfheader = reinterpret_cast<struct SubTimeFrame::Header *>(msgSTFHeader.GetData());
-
-    pstfheader->magic = SubTimeFrame::Magic;
-    pstfheader->timeFrameId = pheader->event_num;
-    pstfheader->FEMType = static_cast<uint32_t>(pheader->type) & 0xff;
-    pstfheader->FEMId = static_cast<uint32_t>(pheader->ipaddr) & 0xff;
-    // pstfheader->length = sizeof(struct SubTimeFrame::Header) + sizeof(struct Roesti::RoestiHeader)+sizeof(rec_buf);
-    pstfheader->length =  pheader->length;//dp_len; //sizeof(struct SubTimeFrame::Header);
-    pstfheader->numMessages = 1;
-    struct timeval now;
-    gettimeofday(&now, nullptr);
-    pstfheader->time_sec = now.tv_sec;
-    pstfheader->time_usec = now.tv_usec;
-
-    #ifdef DEBUG
-        // std::cout << "-------STF HEADER VALUES--------"<< std::endl;
-        // std::cout << "Magic:" << std::hex << pstfheader->magic << std::endl;
-        // std::cout << "Event:" << std::dec << pstfheader->timeFrameId << std::endl;
-        // std::cout << "IP" << std::dec << pstfheader->FEMId << std::endl;
-    #endif
-
-    //--roesti header+ datapacket exact
-    unsigned int fullPacketSize = sizeof(struct Roesti::RoestiHeader) + 
-                                  sizeof(Roesti::DataPacketHeader) +
-                                  pheader->length + 
-                                  sizeof(Roesti::DataPacketFooter);
-    outParts.AddPart(NewMessage(fullPacketSize));
-
-    // outParts.AddPart(NewMessage(sizeof(rec_buf)));
-    auto &msgRoesti = outParts[1];
-
-    char *msgbuf = reinterpret_cast<char *>(msgRoesti.GetData());
-    // memcpy(msgbuf, rec_buf, sizeof(rec_buf));
-    memcpy(msgbuf, pheader, sizeof(struct Roesti::RoestiHeader));
-    msgbuf+=sizeof(struct Roesti::RoestiHeader);
-    memcpy(msgbuf, TCP_data, dp_len);
-
-
-    // Send all outParts
-    Send(outParts, fOutputChannelName);
-    #ifdef DEBUG
-        LOG(warn) << "PACKET sent";
-    #endif
-
-    return true;
-}
 
 bool RoestiSampler::ReadBoardData(fair::mq::Parts& outParts)
 {
@@ -835,33 +624,25 @@ bool RoestiSampler::ReadBoardData(fair::mq::Parts& outParts)
         return false;
     }
 
-        dp_read += fSock.Receive(reinterpret_cast<char *>(TCP_data), dp_len - dp_read, nflag);
-        
-        
-        #ifdef DEBUG
-            std::cout<< "--------------------DATA--------------------" << std::endl;
-            std::cout << "data packet read/length: " << dp_read << "/" << dp_len << std::endl;
-        #endif
-        
-        // if (dp_read >= dp_len) {
-        // 	LOG(warn) << "Length check: " << dp_read << "/" << dp_len;
-        // }else
-        
-        
-        // if (dp_read < dp_len){
-        //     LOG(error) << "Insufficent size of data";
-          if (dp_read <= 0 || dp_read < dp_len) {
-            LOG(warn) << "Incomplete/empty packet: " << dp_read << "/" << dp_len;
-            return false;
-        }else{
-            if (nflag == EAGAIN) {
-                LOG(warn) << "Timeout and Retry";
-                dp_read += fSock.Receive(reinterpret_cast<char *>(TCP_data), dp_len - dp_read, nflag);
-            }
+    dp_read += fSock.Receive(reinterpret_cast<char *>(TCP_data), dp_len - dp_read, nflag);
+
+    #ifdef DEBUG
+        std::cout<< "--------------------DATA--------------------" << std::endl;
+        std::cout << "data packet read/length: " << dp_read << "/" << dp_len << std::endl;
+    #endif
+     
+
+    if (dp_read <= 0 || dp_read < dp_len) {
+        LOG(warn) << "Incomplete/empty packet: " << dp_read << "/" << dp_len;
+        return false;
+    }else{
+        if (nflag == EAGAIN) {
+            LOG(warn) << "Timeout and Retry";
+            dp_read += fSock.Receive(reinterpret_cast<char *>(TCP_data), dp_len - dp_read, nflag);
         }
+    }
 
-
-    //--- Unpack data packet
+    //---Unpack data packet
     CheckRoestiDataPacket(TCP_data, dp_read);
 
     //---Read footer
@@ -925,9 +706,6 @@ bool RoestiSampler::ReadBoardData(fair::mq::Parts& outParts)
 
 bool RoestiSampler::ConditionalRun()
 {
-
-    //--single
-    // SingleBoardReadout();
 
     //--multi
     // for (auto& board : fBoards) {
