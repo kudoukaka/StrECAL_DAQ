@@ -1,13 +1,16 @@
 #==============================================================================
 
-set(INSTALL_BINDIR ${CMAKE_SOURCE_DIR}/bin)
-set(INSTALL_LIBDIR ${CMAKE_SOURCE_DIR}/lib)
+#set(INSTALL_BINDIR ${CMAKE_SOURCE_DIR}/bin)
+#set(INSTALL_LIBDIR ${CMAKE_SOURCE_DIR}/lib)
 
 #foreach(lvar IN ITEMS Sampler; Sink; NullDevice;
 foreach(lvar IN ITEMS
-	RoestiSampler;
-	RoestiSink;
-  RoestiDash;
+	#RoestiSampler;
+	#RoestiSink;
+  #RoestiDash;
+	#RoestiSinkGen;
+  ErosSampler;
+  ErosSink;
 )
   set(EXEC ${lvar})
   add_executable(${EXEC} 
@@ -35,8 +38,9 @@ foreach(lvar IN ITEMS
   target_link_libraries(${EXEC} PUBLIC 
     ${Boost_LIBRARIES};  
     #${fmt_LIB};
-    FairMQ;
-    FairMQStateMachine;
+    FairMQ::FairMQ
+    #FairMQ;
+    #FairMQStateMachine;
     FairLogger;
     ${ROOT_LIBRARIES};
     ${HIREDIS_LIB};
@@ -45,10 +49,10 @@ foreach(lvar IN ITEMS
 
   install(TARGETS
     ${EXEC};
-    #LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    #RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    LIBRARY DESTINATION ${INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${INSTALL_BINDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    #LIBRARY DESTINATION ${INSTALL_LIBDIR}
+    #RUNTIME DESTINATION ${INSTALL_BINDIR}
   )
 endforeach()
 
