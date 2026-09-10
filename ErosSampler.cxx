@@ -243,7 +243,7 @@ void ErosSampler::LoadConfigFromRedis()
 	freeReplyObject(selectReply);
 
 	// Build the Redis key for this chain: eros:chain_<num>:boards
-	std::string chainKey = "eros:chain_" + std::to_string(fChainNum) + ":boards";
+	std::string chainKey = "parameters:eros-chain:" + std::to_string(fChainNum);
 	LOG(info) << "Loading board chain from Redis key: " << chainKey;
 
 	// Get the complete board chain from Redis
@@ -299,7 +299,7 @@ void ErosSampler::LoadConfigFromRedis()
 		throw std::runtime_error("Board IP not found in chain configuration");
 	}
 
-    std::string boardKey = "eros:chain:" + std::to_string(fChainNum) + ":board:" + std::to_string(fBoard.boardIndex);
+    std::string boardKey = "parameters:eros:chain:" + std::to_string(fChainNum) + ":board:" + std::to_string(fBoard.boardIndex);
     LOG(info) << "Loading board register config from Redis key: " << boardKey;
 
     fBoardRegisterOverrides.clear();
